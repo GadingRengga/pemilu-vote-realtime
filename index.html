@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hitung Suara Realtime</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    }
+  </script>
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* Toast Notification */
+    .alert {
+      position: fixed;
+      top: 80px;
+      /* jarak dari atas */
+      right: 20px;
+      /* jarak dari kanan */
+      width: auto;
+      max-width: 320px;
+      z-index: 2000;
+      /* biar di atas semua */
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin: 10px 0;
+      display: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      animation: fadeIn 0.3s ease, fadeOut 0.3s ease 4.7s;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 400px;
+      /* fix stabil */
+      min-height: 300px;
+      width: 100%;
+    }
+
+    .tally-cell {
+      max-width: 200px;
+      /* atur lebar sesuai selera */
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      to {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+    }
+
+
+    .card {
+      background: rgba(26, 32, 44, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .tally {
+      font-size: 16px;
+      letter-spacing: 1px;
+      font-family: 'Courier New', monospace;
+    }
+
+    @media (min-width: 640px) {
+      .tally {
+        font-size: 18px;
+        letter-spacing: 2px;
+      }
+    }
+
+    .tally span.five {
+      text-decoration: line-through;
+      color: #f56565;
+      font-weight: bold;
+    }
+
+    .btn {
+      transition: all 0.2s ease;
+      border-radius: 8px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+      color: white;
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      color: white;
+    }
+
+    .btn-warning {
+      background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+      color: white;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+      color: white;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 2px solid rgba(66, 153, 225, 0.5);
+      color: #4299e1;
+    }
+
+    .btn-ghost:hover {
+      background: rgba(66, 153, 225, 0.1);
+      border-color: #4299e1;
+    }
+
+    .form-input {
+      background: rgba(45, 55, 72, 0.6);
+      border: 1px solid rgba(74, 85, 104, 0.5);
+      color: #e2e8f0;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      width: 100%;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #4299e1;
+      box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.3);
+    }
+
+    .form-input::placeholder {
+      color: #a0aec0;
+    }
+
+    .table-row {
+      border-bottom: 1px solid rgba(74, 85, 104, 0.3);
+      transition: background 0.2s ease;
+    }
+
+    .table-row:hover {
+      background: rgba(45, 55, 72, 0.5) !important;
+    }
+
+    .header-glow {
+      text-shadow: 0 0 15px rgba(66, 153, 225, 0.5);
+    }
+
+    .admin-badge {
+      background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 0.75rem;
+      margin-left: 10px;
+      display: inline-block;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(26, 32, 44, 0.5);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #4299e1;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3182ce;
+    }
+
+    .page-container {
+      display: none;
+      min-height: 100vh;
+    }
+
+    .page-container.active {
+      display: block;
+    }
+
+    .login-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .login-form {
+      width: 100%;
+      max-width: 400px;
+      padding: 30px;
+    }
+
+    /* .alert {
+      padding: 12px;
+      border-radius: 8px;
+      margin: 10px 0;
+      display: none;
+      position: relative;
+    } */
+
+    .alert-error {
+      background: rgba(252, 129, 129, 0.1);
+      border: 1px solid rgba(252, 129, 129, 0.3);
+      color: #fc8181;
+    }
+
+    .alert-success {
+      background: rgba(72, 187, 120, 0.1);
+      border: 1px solid rgba(72, 187, 120, 0.3);
+      color: #68d391;
+    }
+
+    .alert-warning {
+      background: rgba(237, 137, 54, 0.1);
+      border: 1px solid rgba(237, 137, 54, 0.3);
+      color: #f6ad55;
+    }
+
+    .user-info {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 1000;
+      background: rgba(26, 32, 44, 0.9);
+      padding: 10px 15px;
+      border-radius: 25px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .user-avatar {
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .dashboard-header {
+      background: rgba(26, 32, 44, 0.9);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 15px 0;
+      margin-bottom: 20px;
+    }
+
+    .loading-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid transparent;
+      border-top: 2px solid currentColor;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .connection-status {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      z-index: 1000;
+      transition: all 0.3s ease;
+    }
+
+    .connection-online {
+      background: rgba(72, 187, 120, 0.2);
+      border: 1px solid rgba(72, 187, 120, 0.5);
+      color: #68d391;
+    }
+
+    .connection-offline {
+      background: rgba(245, 101, 101, 0.2);
+      border: 1px solid rgba(245, 101, 101, 0.5);
+      color: #fc8181;
+    }
+
+    /* Mobile Responsive */
+    @media (max-width: 640px) {
+      .user-info {
+        position: relative;
+        top: auto;
+        right: auto;
+        justify-content: center;
+        margin-bottom: 20px;
+      }
+
+      .tally {
+        font-size: 14px;
+        letter-spacing: 1px;
+      }
+
+      .btn {
+        padding: 8px 12px;
+        font-size: 0.875rem;
+      }
+
+      .card {
+        margin: 10px;
+      }
+
+      .admin-form {
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .admin-form input {
+        margin-bottom: 10px;
+      }
+
+      table {
+        font-size: 0.875rem;
+      }
+
+      .table-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        justify-content: center;
+      }
+
+      .table-actions .btn {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .login-form {
+        padding: 20px;
+        margin: 10px;
+      }
+
+      h1 {
+        font-size: 1.875rem;
+      }
+
+      .admin-badge {
+        display: block;
+        margin: 10px auto;
+        text-align: center;
+        width: fit-content;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="themeToggle" class="fixed top-4 right-4 z-50 justify-start" style="width: 90%;">
+    <button onclick="toggleDarkMode()" class="btn btn-ghost px-3 py-2">
+      <i id="themeIcon" class="fas fa-sun"></i>
+    </button>
+  </div>
+  <!-- Halaman Dashboard (Default) -->
+  <div id="dashboardPage" class="page-container active">
+    <div class="dashboard-header">
+      <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
+        <h1 class="text-2xl sm:text-4xl font-bold header-glow">
+          📊 Hitung Suara Realtime
+        </h1>
+        <button onclick="showLogin()" class="btn btn-ghost px-4 py-2">
+          <i class="fas fa-sign-in-alt"></i>
+          <span class="hidden sm:inline">Login Admin</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto px-4">
+      <p class="text-center text-gray-400 mb-8">Pemantauan hasil pemungutan suara ketua paguyuban Marison Regency Jeruk
+        Sawit secara realtime</p>
+
+      <div class="alert alert-warning" id="guestAlert">
+        <i class="fas fa-info-circle mr-2"></i>
+        Anda sedang melihat dalam mode guest. Login sebagai admin untuk mengelola kandidat dan suara.
+      </div>
+
+      <div class="card overflow-hidden mb-8">
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse">
+            <thead>
+              <tr class="bg-gradient-to-r from-blue-700 to-blue-800 text-white">
+                <th class="p-3 sm:p-4 text-left">No</th>
+                <th class="p-3 sm:p-4 text-left">Kandidat</th>
+                <th class="p-3 sm:p-4 text-center">Suara</th>
+                <th class="p-3 sm:p-4 text-center hidden sm:table-cell">Tally Marks</th>
+              </tr>
+            </thead>
+            <tbody id="guestKandidatBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="guestChart" class="card p-4 sm:p-6">
+        <h2 class="text-xl sm:text-2xl font-semibold mb-4 text-center">Grafik Perolehan Suara</h2>
+        <div class="chart-container">
+          <canvas id="guestChartSuara"></canvas>
+        </div>
+      </div>
+
+      <footer class="text-center text-gray-500 mt-12 text-sm px-4">
+        <p>© 2025 Sistem Hitung Suara Realtime. G-Project Studio.</p>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Halaman Login -->
+  <div id="loginPage" class="page-container">
+    <div class="login-container">
+      <div class="card login-form">
+        <div class="text-center mb-6">
+          <button onclick="showDashboard()" class="btn btn-ghost mb-4">
+            <i class="fas fa-arrow-left"></i>
+            Kembali ke Dashboard
+          </button>
+        </div>
+
+        <h2 class="text-2xl sm:text-3xl font-bold text-center mb-2 header-glow">🔐 Login Admin</h2>
+        <p class="text-center text-gray-400 mb-6">Masuk untuk mengelola sistem penghitungan suara</p>
+
+        <div class="mb-4">
+          <label class="block text-gray-300 mb-2">Email</label>
+          <input type="email" id="email" class="form-input p-3" placeholder="alamat@email.com">
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-gray-300 mb-2">Password</label>
+          <input type="password" id="password" class="form-input p-3" placeholder="••••••••">
+        </div>
+
+        <button onclick="login()" id="loginBtn" class="btn btn-primary w-full py-3 mb-4">
+          <span id="loginBtnText">Masuk</span>
+          <div id="loginSpinner" class="loading-spinner hidden"></div>
+        </button>
+
+        <div class="alert alert-error" id="loginError"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Halaman Admin -->
+  <div id="adminPage" class="page-container">
+    <div class="user-info">
+      <div class="user-avatar" id="userAvatar"></div>
+      <span id="userEmail" class="text-sm hidden sm:inline"></span>
+      <button onclick="logout()" class="btn btn-danger py-2 px-2">
+        <i class="fas fa-sign-out-alt"></i>
+        <span class="hidden sm:inline">Logout</span>
+      </button>
+    </div>
+
+    <div class="max-w-6xl mx-auto px-4 pt-20">
+      <h1 class="text-2xl sm:text-4xl font-bold text-center mb-2 header-glow">
+        📊 Hitung Suara Realtime
+        <span class="admin-badge">ADMIN MODE</span>
+      </h1>
+      <p class="text-center text-gray-400 mb-8">Panel administrasi sistem penghitungan suara ketua paguyuban Marison
+        Regency Jeruk Sawit</p>
+
+      <div class="alert alert-success" id="successAlert"></div>
+      <div class="alert alert-error" id="errorAlert"></div>
+
+      <!-- Form tambah kandidat -->
+      <div class="mb-6 card p-4">
+        <div class="admin-form flex flex-col sm:flex-row gap-3 justify-center items-center">
+          <input type="text" id="newKandidat" placeholder="Nama kandidat" class="form-input p-3 sm:w-72">
+          <div class="flex gap-2 w-full sm:w-auto">
+            <button onclick="tambahKandidat()" class="btn btn-success px-4 py-3 flex-1 sm:flex-none">
+              <i class="fas fa-plus"></i>
+              <span class="hidden sm:inline">Tambah</span>
+            </button>
+            <button onclick="resetSemua()" class="btn btn-danger px-4 py-3 flex-1 sm:flex-none">
+              <i class="fas fa-refresh"></i>
+              <span class="hidden sm:inline">Reset</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card overflow-hidden mb-8">
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse">
+            <thead>
+              <tr class="bg-gradient-to-r from-blue-700 to-blue-800 text-white">
+                <th class="p-3 sm:p-4 text-center">No.</th>
+                <th class="p-3 sm:p-4 text-left">Kandidat</th>
+                <th class="p-3 sm:p-4 text-center">Suara</th>
+                <th class="p-3 sm:p-4 text-center hidden sm:table-cell">Tally Marks</th>
+                <th class="p-3 sm:p-4 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="adminKandidatBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card p-4 sm:p-6">
+        <h2 class="text-xl sm:text-2xl font-semibold mb-4 text-center">Grafik Perolehan Suara</h2>
+        <div class="chart-container">
+          <canvas id="adminChartSuara"></canvas>
+        </div>
+      </div>
+
+      <footer class="text-center text-gray-500 mt-12 text-sm">
+        <p>© 2025 Sistem Hitung Suara Realtime. G-Project Studio.</p>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Status Koneksi -->
+  <div id="connectionStatus" class="connection-status connection-online">
+    <i class="fas fa-wifi mr-1"></i>
+    <span>Online</span>
+  </div>
+
+
+  <script>
+    // === 1. Konfigurasi Firebase ===
+    const firebaseConfig = {
+      apiKey: "AIzaSyB0D0iSWh9CoOsaXB2pajE5oWozbdcK49g",
+      authDomain: "hitung-suara-realtime.firebaseapp.com",
+      databaseURL: "https://hitung-suara-realtime-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "hitung-suara-realtime",
+      storageBucket: "hitung-suara-realtime.appspot.com",
+      messagingSenderId: "612258190112",
+      appId: "1:612258190112:web:8cb4666a35d5cbd7c6bd45",
+      measurementId: "G-P1RCZHTKYF"
+    };
+
+    let app;
+    let db;
+    let auth;
+    let kandidatRef;
+
+    try {
+      app = firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      auth = firebase.auth();
+      kandidatRef = db.ref("kandidat");
+    } catch (error) {
+      console.error("Firebase initialization error:", error);
+      showAlert('error', 'Gagal menginisialisasi Firebase: ' + error.message);
+    }
+
+    // === 2. Variabel Global ===
+    let currentUser = null;
+    let isAdmin = false;
+    let adminChart = null;
+    let guestChart = null;
+    let connectionStatusEl = document.getElementById('connectionStatus');
+
+    // === 3. Manajemen Halaman ===
+    function showPage(pageId) {
+      document.querySelectorAll('.page-container').forEach(page => {
+        page.classList.remove('active');
+      });
+      document.getElementById(pageId).classList.add('active');
+    }
+
+    function showDashboard() {
+      showPage('dashboardPage');
+      document.getElementById('guestAlert').style.display = 'block';
+    }
+
+    function showLogin() {
+      showPage('loginPage');
+      // Reset form
+      document.getElementById('email').value = '';
+      document.getElementById('password').value = '';
+      hideAlert('loginError');
+    }
+
+    function showAdmin() {
+      showPage('adminPage');
+      hideAlert('guestAlert');
+    }
+
+    // === 4. Manajemen Alert ===
+    function showAlert(type, message, alertId = null) {
+      const alertElement = alertId ? document.getElementById(alertId) :
+        document.querySelector(`.alert-${type}`);
+
+      if (alertElement) {
+        alertElement.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-triangle' :
+          type === 'success' ? 'check-circle' : 'info-circle'} mr-2"></i>${message}`;
+        alertElement.style.display = 'block';
+
+        // Auto hide after 5 seconds
+        setTimeout(() => {
+          alertElement.style.display = 'none';
+        }, 5000);
+      }
+    }
+
+    function hideAlert(alertId) {
+      const alertElement = typeof alertId === 'string' ?
+        document.getElementById(alertId) : alertId;
+      if (alertElement) {
+        alertElement.style.display = 'none';
+      }
+    }
+
+    // === 5. Manajemen Koneksi ===
+    function updateConnectionStatus(isOnline) {
+      if (connectionStatusEl) {
+        connectionStatusEl.className = `connection-status ${isOnline ? 'connection-online' : 'connection-offline'}`;
+        connectionStatusEl.innerHTML = `<i class="fas fa-${isOnline ? 'wifi' : 'wifi-slash'} mr-1"></i>
+        <span>${isOnline ? 'Online' : 'Offline'}</span>`;
+      }
+    }
+
+    // Monitor koneksi Firebase
+    if (db) {
+      const connectedRef = db.ref(".info/connected");
+      connectedRef.on("value", (snap) => {
+        updateConnectionStatus(snap.val() === true);
+      });
+    }
+
+    // === 6. Authentikasi ===
+    if (auth) {
+      auth.onAuthStateChanged(user => {
+        try {
+          if (user) {
+            currentUser = user;
+            isAdmin = true;
+            document.getElementById('userAvatar').textContent = user.email.charAt(0).toUpperCase();
+            // document.getElementById('userEmail').textContent = user.email;
+            showAdmin();
+            showAlert('success', `Selamat datang, ${user.email}!`, 'successAlert');
+          } else {
+            currentUser = null;
+            isAdmin = false;
+            showDashboard();
+          }
+        } catch (error) {
+          console.error("Auth state change error:", error);
+          showAlert('error', 'Terjadi kesalahan saat memverifikasi status login', 'errorAlert');
+        }
+      });
+    }
+
+    function login() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const loginBtn = document.getElementById('loginBtn');
+      const loginBtnText = document.getElementById('loginBtnText');
+      const loginSpinner = document.getElementById('loginSpinner');
+
+      // Validasi input
+      if (!email) {
+        showAlert('error', 'Email harus diisi', 'loginError');
+        return;
+      }
+
+      if (!password) {
+        showAlert('error', 'Password harus diisi', 'loginError');
+        return;
+      }
+
+      // Validasi format email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        showAlert('error', 'Format email tidak valid', 'loginError');
+        return;
+      }
+
+      // Loading state
+      loginBtn.disabled = true;
+      loginBtnText.textContent = 'Memproses...';
+      loginSpinner.classList.remove('hidden');
+      hideAlert('loginError');
+
+      // Login dengan Firebase Auth
+      auth.signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          currentUser = userCredential.user;
+          hideAlert('loginError');
+        })
+        .catch((error) => {
+          console.error("Login error:", error);
+          let errorMessage = 'Terjadi kesalahan saat login';
+
+          switch (error.code) {
+            case 'auth/user-not-found':
+              errorMessage = 'Email tidak terdaftar';
+              break;
+            case 'auth/wrong-password':
+              errorMessage = 'Password salah';
+              break;
+            case 'auth/invalid-email':
+              errorMessage = 'Format email tidak valid';
+              break;
+            case 'auth/too-many-requests':
+              errorMessage = 'Terlalu banyak percobaan login. Coba lagi nanti';
+              break;
+            case 'auth/network-request-failed':
+              errorMessage = 'Gagal terhubung ke server. Periksa koneksi internet';
+              break;
+            default:
+              errorMessage = error.message;
+          }
+
+          showAlert('error', errorMessage, 'loginError');
+        })
+        .finally(() => {
+          // Reset loading state
+          loginBtn.disabled = false;
+          loginBtnText.textContent = 'Masuk';
+          loginSpinner.classList.add('hidden');
+        });
+    }
+
+    function logout() {
+      if (confirm('Yakin ingin logout?')) {
+        auth.signOut().then(() => {
+          currentUser = null;
+          isAdmin = false;
+          showDashboard();
+        }).catch((error) => {
+          console.error("Logout error:", error);
+          showAlert('error', 'Gagal logout: ' + error.message, 'errorAlert');
+        });
+      }
+    }
+
+    // === 7. Render Data ===
+    function renderKandidat(snapshot, isAdminView = false) {
+      const tbody = document.getElementById(isAdminView ? 'adminKandidatBody' : 'guestKandidatBody');
+      if (!tbody) return;
+
+      tbody.innerHTML = "";
+      const data = snapshot.val() || {};
+      const labels = [];
+      const values = [];
+      const colors = [
+        '#4299e1', '#48bb78', '#ed8936', '#f56565',
+        '#9f7aea', '#fbb6ce', '#4fd1c5', '#fc8181'
+      ];
+
+      const entries = Object.entries(data);
+
+      if (entries.length === 0) {
+        tbody.innerHTML = `
+          <tr class="table-row">
+            <td colspan="${isAdminView ? '4' : '3'}" class="p-8 text-center text-gray-400">
+              <i class="fas fa-inbox text-4xl mb-4 block"></i>
+              Belum ada kandidat yang terdaftar
+            </td>
+          </tr>`;
+      } else {
+        entries.forEach(([id, kandidat], index) => {
+          if (!kandidat || !kandidat.nama) return;
+
+          const suara = kandidat.suara || 0;
+          const colorIndex = index % colors.length;
+
+          row = document.createElement("tr");
+          row.className = "table-row";
+
+          row.innerHTML = `
+            <td class="p-3 sm:p-4 text-center font-bold">${index + 1}</td>
+            <td class="p-3 sm:p-4 font-semibold text-left">
+              <span class="inline-block w-4 h-4 sm:w-6 sm:h-6 rounded-full mr-2 sm:mr-3"
+                style="background: ${colors[colorIndex]}"></span>
+              <span class="text-sm sm:text-base">${kandidat.nama}</span>
+            </td>
+            <td class="p-3 sm:p-4 text-lg sm:text-2xl font-bold text-center">${suara}</td>
+            <td class="p-3 sm:p-4 tally hidden sm:table-cell">${buatTally(suara)}</td>
+            ${isAdminView ? `
+            <td class="p-3 sm:p-4">
+              <div class="table-actions">
+                <button onclick="ubahSuara('${id}', 1)" class="btn btn-primary px-1">
+                  <i class="fas fa-plus"></i>
+                  <span class="hidden sm:inline">1</span>
+                </button>
+                <button onclick="ubahSuara('${id}', -1)" class="btn btn-warning px-1">
+                  <i class="fas fa-minus"></i>
+                  <span class="hidden sm:inline">1</span>
+                </button>
+                <button onclick="hapusKandidat('${id}', '${kandidat.nama}')" class="btn btn-danger px-1">
+                  <i class="fas fa-trash"></i>
+                  <span class="hidden sm:inline">Hapus</span>
+                </button>
+              </div>
+            </td>` : ''}
+          `;
+
+          tbody.appendChild(row);
+
+          labels.push(kandidat.nama);
+          values.push(suara);
+        });
+      }
+
+      updateChart(labels, values, isAdminView);
+    }
+
+    function buatTally(jumlah) {
+      if (!jumlah) return "-";
+      let tally = "";
+      const fullGroups = Math.floor(jumlah / 5);
+      const remainder = jumlah % 5;
+
+      for (let i = 0; i < fullGroups; i++) {
+        tally += "<span class='five'>||||</span> ";
+      }
+
+      for (let i = 0; i < remainder; i++) {
+        tally += "|";
+      }
+
+      return tally || "-";
+    }
+
+    // === 8. Aksi Admin ===
+    function tambahKandidat() {
+      if (!isAdmin || !kandidatRef) {
+        showAlert('error', 'Hanya admin yang dapat menambah kandidat', 'errorAlert');
+        return;
+      }
+
+      const nama = document.getElementById("newKandidat").value.trim();
+      if (!nama) {
+        showAlert('error', 'Nama kandidat tidak boleh kosong', 'errorAlert');
+        return;
+      }
+
+      if (nama.length < 2) {
+        showAlert('error', 'Nama kandidat minimal 2 karakter', 'errorAlert');
+        return;
+      }
+
+      if (nama.length > 50) {
+        showAlert('error', 'Nama kandidat maksimal 50 karakter', 'errorAlert');
+        return;
+      }
+
+      // Cek duplikasi nama
+      kandidatRef.once("value")
+        .then(snapshot => {
+          const data = snapshot.val() || {};
+          const existingNames = Object.values(data).map(k => k.nama?.toLowerCase());
+
+          if (existingNames.includes(nama.toLowerCase())) {
+            showAlert('error', 'Nama kandidat sudah ada', 'errorAlert');
+            return;
+          }
+
+          // Tambah kandidat baru
+          return kandidatRef.push({
+            nama: nama,
+            suara: 0,
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+          });
+        })
+        .then(() => {
+          document.getElementById("newKandidat").value = "";
+          showAlert('success', `Kandidat "${nama}" berhasil ditambahkan`, 'successAlert');
+        })
+        .catch(error => {
+          console.error("Error adding candidate:", error);
+          showAlert('error', 'Gagal menambah kandidat: ' + error.message, 'errorAlert');
+        });
+    }
+
+    function ubahSuara(id, delta) {
+      if (!isAdmin || !kandidatRef) {
+        showAlert('error', 'Hanya admin yang dapat mengubah suara', 'errorAlert');
+        return;
+      }
+
+      const ref = kandidatRef.child(id).child("suara");
+      ref.transaction(currentValue => {
+        const newValue = Math.max(0, (currentValue || 0) + delta);
+        return newValue;
+      })
+        .then(result => {
+          if (result.committed) {
+            const action = delta > 0 ? 'ditambah' : 'dikurangi';
+            showAlert('success', `Suara berhasil ${action}`, 'successAlert');
+          }
+        })
+        .catch(error => {
+          console.error("Error updating vote:", error);
+          showAlert('error', 'Gagal mengubah suara: ' + error.message, 'errorAlert');
+        });
+    }
+
+    function hapusKandidat(id, nama) {
+      if (!isAdmin || !kandidatRef) {
+        showAlert('error', 'Hanya admin yang dapat menghapus kandidat', 'errorAlert');
+        return;
+      }
+
+      if (confirm(`Yakin ingin menghapus kandidat "${nama}"?\nSemua suara akan hilang dan tidak dapat dikembalikan.`)) {
+        kandidatRef.child(id).remove()
+          .then(() => {
+            showAlert('success', `Kandidat "${nama}" berhasil dihapus`, 'successAlert');
+          })
+          .catch(error => {
+            console.error("Error deleting candidate:", error);
+            showAlert('error', 'Gagal menghapus kandidat: ' + error.message, 'errorAlert');
+          });
+      }
+    }
+
+    function resetSemua() {
+      if (!isAdmin || !kandidatRef) {
+        showAlert('error', 'Hanya admin yang dapat mereset suara', 'errorAlert');
+        return;
+      }
+
+      if (confirm("Yakin ingin mereset semua suara ke 0?\nTindakan ini tidak dapat dibatalkan.")) {
+        kandidatRef.once("value")
+          .then(snapshot => {
+            const updates = {};
+            snapshot.forEach(child => {
+              updates[`${child.key}/suara`] = 0;
+            });
+            return kandidatRef.update(updates);
+          })
+          .then(() => {
+            showAlert('success', 'Semua suara berhasil direset ke 0', 'successAlert');
+          })
+          .catch(error => {
+            console.error("Error resetting votes:", error);
+            showAlert('error', 'Gagal mereset suara: ' + error.message, 'errorAlert');
+          });
+      }
+    }
+
+    // === 9. Chart.js ===
+    function updateChart(labels, values, isAdminView = false) {
+      const chartId = isAdminView ? 'adminChartSuara' : 'guestChartSuara';
+      const canvas = document.getElementById(chartId);
+
+      if (!canvas) return;
+
+      const backgroundColors = [
+        'rgba(66, 153, 225, 0.7)',
+        'rgba(72, 187, 120, 0.7)',
+        'rgba(237, 137, 54, 0.7)',
+        'rgba(245, 101, 101, 0.7)',
+        'rgba(159, 122, 234, 0.7)',
+        'rgba(251, 182, 206, 0.7)',
+        'rgba(79, 209, 197, 0.7)',
+        'rgba(252, 129, 129, 0.7)'
+      ];
+
+      const borderColors = [
+        'rgba(66, 153, 225, 1)',
+        'rgba(72, 187, 120, 1)',
+        'rgba(237, 137, 54, 1)',
+        'rgba(245, 101, 101, 1)',
+        'rgba(159, 122, 234, 1)',
+        'rgba(251, 182, 206, 1)',
+        'rgba(79, 209, 197, 1)',
+        'rgba(252, 129, 129, 1)'
+      ];
+
+      const currentChart = isAdminView ? adminChart : guestChart;
+
+      if (!currentChart) {
+        try {
+          const ctx = canvas.getContext('2d');
+
+          Chart.defaults.color = '#e2e8f0';
+          Chart.defaults.font.family = "'Segoe UI', sans-serif";
+
+          const newChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels: labels,
+              datasets: [{
+                label: "Jumlah Suara",
+                data: values,
+                backgroundColor: backgroundColors.slice(0, labels.length),
+                borderColor: borderColors.slice(0, labels.length),
+                borderWidth: 2,
+                borderRadius: 6,
+                borderSkipped: false,
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: false
+                },
+                tooltip: {
+                  backgroundColor: 'rgba(26, 32, 44, 0.9)',
+                  titleColor: '#e2e8f0',
+                  bodyColor: '#e2e8f0',
+                  borderColor: 'rgba(66, 153, 225, 0.5)',
+                  borderWidth: 1,
+                  cornerRadius: 8,
+                  displayColors: true,
+                  callbacks: {
+                    title: function (context) {
+                      return context[0].label;
+                    },
+                    label: function (context) {
+                      return `Suara: ${context.parsed.y}`;
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  grid: {
+                    color: 'rgba(74, 85, 104, 0.3)',
+                    drawBorder: false
+                  },
+                  ticks: {
+                    stepSize: 1,
+                    callback: function (value) {
+                      return Number.isInteger(value) ? value : '';
+                    }
+                  }
+                },
+                x: {
+                  grid: {
+                    display: false
+                  },
+                  ticks: {
+                    maxRotation: 45,
+                    minRotation: 0
+                  }
+                }
+              },
+              animation: {
+                duration: 500,
+                easing: 'easeInOutQuart'
+              }
+            }
+          });
+
+          if (isAdminView) {
+            adminChart = newChart;
+          } else {
+            guestChart = newChart;
+          }
+
+          // Set canvas height
+          canvas.style.height = '400px';
+
+        } catch (error) {
+          console.error("Error creating chart:", error);
+          showAlert('error', 'Gagal membuat grafik: ' + error.message, isAdminView ? 'errorAlert' : null);
+        }
+      } else {
+        try {
+          currentChart.data.labels = labels;
+          currentChart.data.datasets[0].data = values;
+          currentChart.data.datasets[0].backgroundColor = backgroundColors.slice(0, labels.length);
+          currentChart.data.datasets[0].borderColor = borderColors.slice(0, labels.length);
+          currentChart.update('active');
+        } catch (error) {
+          console.error("Error updating chart:", error);
+        }
+      }
+    }
+
+    // === 10. Event Listeners ===
+    document.addEventListener('DOMContentLoaded', function () {
+      // Enter key untuk login
+      document.getElementById('email')?.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          document.getElementById('password').focus();
+        }
+      });
+
+      document.getElementById('password')?.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          login();
+        }
+      });
+
+      // Enter key untuk tambah kandidat
+      document.getElementById('newKandidat')?.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          tambahKandidat();
+        }
+      });
+
+      // Handle offline/online events
+      window.addEventListener('online', () => updateConnectionStatus(true));
+      window.addEventListener('offline', () => updateConnectionStatus(false));
+    });
+
+    // === 11. Firebase Realtime Listeners ===
+    if (kandidatRef) {
+      // Listener untuk guest view
+      kandidatRef.on("value", (snapshot) => {
+        try {
+          renderKandidat(snapshot, false); // Guest view
+          if (isAdmin) {
+            renderKandidat(snapshot, true); // Admin view
+          }
+        } catch (error) {
+          console.error("Error rendering data:", error);
+          showAlert('error', 'Gagal memuat data: ' + error.message);
+        }
+      }, (error) => {
+        console.error("Firebase listener error:", error);
+        showAlert('error', 'Koneksi ke database terputus. Coba refresh halaman.');
+        updateConnectionStatus(false);
+      });
+    }
+
+    // === 12. Error Handling Global ===
+    window.addEventListener('error', function (e) {
+      console.error('Global error:', e.error);
+      showAlert('error', 'Terjadi kesalahan pada aplikasi. Silakan refresh halaman.');
+    });
+
+    window.addEventListener('unhandledrejection', function (e) {
+      console.error('Unhandled promise rejection:', e.reason);
+      showAlert('error', 'Terjadi kesalahan koneksi. Periksa internet Anda.');
+    });
+
+    // === 13. Konfigurasi Aturan Database ===
+    // Untuk mengatasi PERMISSION_DENIED, atur aturan database di Firebase Console:
+    /*
+    {
+      "rules": {
+        "kandidat": {
+          ".read": true,
+          ".write": "auth != null"
+        }
+      }
+    }
+    */
+
+    // === 14. Initialize app ===
+    function initializeApp() {
+      try {
+        // Show guest alert on dashboard
+        if (document.getElementById('dashboardPage').classList.contains('active')) {
+          setTimeout(() => {
+            document.getElementById('guestAlert').style.display = 'block';
+          }, 1000);
+        }
+
+        console.log('App initialized successfully');
+      } catch (error) {
+        console.error('App initialization error:', error);
+        showAlert('error', 'Gagal memuat aplikasi. Silakan refresh halaman.');
+      }
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeApp);
+    } else {
+      initializeApp();
+    }
+
+    function applyTheme(isDark) {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+        document.getElementById('themeIcon').className = "fas fa-sun";
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+        document.getElementById('themeIcon').className = "fas fa-moon";
+      }
+    }
+
+    function toggleDarkMode() {
+      const isDark = document.documentElement.classList.contains('dark');
+      applyTheme(!isDark);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      applyTheme(savedTheme === 'dark');
+    });
+  </script>
+
+</body>
+
+</html>
