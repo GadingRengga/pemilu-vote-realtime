@@ -1,1405 +1,1723 @@
 <!DOCTYPE html>
-<html lang="id" class="">
+<html lang="id">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hitung Suara Realtime</title>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <script>
-    tailwind.config = {
-      darkMode: 'class'
-    }
-  </script>
-
-  <style>
-    :root {
-      --light-bg: #f7fafc;
-      --light-text: #2d3748;
-      --light-card: #ffffff;
-      --light-border: #e2e8f0;
-    }
-
-    body {
-      background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-      color: #2d3748;
-      min-height: 100vh;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      transition: background 0.3s ease, color 0.3s ease;
-    }
-
-    body.dark-mode {
-      background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
-      color: #e2e8f0;
-    }
-
-    /* Toast Notification */
-    .alert {
-      position: fixed;
-      top: 80px;
-      right: 20px;
-      width: auto;
-      max-width: 320px;
-      z-index: 2000;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin: 10px 0;
-      display: none;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      animation: fadeIn 0.3s ease, fadeOut 0.3s ease 4.7s;
-    }
-
-    .chart-container {
-      position: relative;
-      height: 400px;
-      min-height: 300px;
-      width: 100%;
-    }
-
-    .tally-cell {
-      max-width: 200px;
-      overflow-x: auto;
-      white-space: nowarp;
-    }
-
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(-10px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @keyframes fadeOut {
-      from {
-        opacity: 1;
-        transform: translateY(0);
-      }
-
-      to {
-        opacity: 0;
-        transform: translateY(-10px);
-      }
-    }
-
-    .card {
-      background: rgba(255, 255, 255, 0.9);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      transition: background 0.3s ease, border 0.3s ease;
-    }
-
-    .dark-mode .card {
-      background: rgba(26, 32, 44, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    }
-
-    .tally {
-      font-size: 16px;
-      letter-spacing: 1px;
-      font-family: 'Courier New', monospace;
-    }
-
-    @media (min-width: 640px) {
-      .tally {
-        font-size: 18px;
-        letter-spacing: 2px;
-      }
-    }
-
-    .tally span.five {
-      text-decoration: line-through;
-      color: #f56565;
-      font-weight: bold;
-    }
-
-    .btn {
-      transition: all 0.2s ease;
-      border-radius: 8px;
-      font-weight: 600;
-      border: none;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-    }
-
-    .btn:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
-      color: white;
-    }
-
-    .btn-success {
-      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-      color: white;
-    }
-
-    .btn-warning {
-      background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
-      color: white;
-    }
-
-    .btn-danger {
-      background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-      color: white;
-    }
-
-    .btn-ghost {
-      background: transparent;
-      border: 2px solid rgba(66, 153, 225, 0.7);
-      color: #4299e1;
-    }
-
-    .dark-mode .btn-ghost {
-      border: 2px solid rgba(66, 153, 225, 0.5);
-    }
-
-    .btn-ghost:hover {
-      background: rgba(66, 153, 225, 0.1);
-      border-color: #4299e1;
-    }
-
-    .form-input {
-      background: rgba(255, 255, 255, 0.9);
-      border: 1px solid #e2e8f0;
-      color: #2d3748;
-      border-radius: 8px;
-      transition: all 0.3s ease;
-      width: 100%;
-    }
-
-    .dark-mode .form-input {
-      background: rgba(45, 55, 72, 0.6);
-      border: 1px solid rgba(74, 85, 104, 0.5);
-      color: #e2e8f0;
-    }
-
-    .form-input:focus {
-      outline: none;
-      border-color: #4299e1;
-      box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.3);
-    }
-
-    .form-input::placeholder {
-      color: #a0aec0;
-    }
-
-    .table-row {
-      border-bottom: 1px solid #e2e8f0;
-      transition: background 0.2s ease;
-    }
-
-    .dark-mode .table-row {
-      border-bottom: 1px solid rgba(74, 85, 104, 0.3);
-    }
-
-    .table-row:hover {
-      background: rgba(237, 242, 247, 0.7) !important;
-    }
-
-    .dark-mode .table-row:hover {
-      background: rgba(45, 55, 72, 0.5) !important;
-    }
-
-    .header-glow {
-      text-shadow: 0 0 15px rgba(66, 153, 225, 0.5);
-    }
-
-    .admin-badge {
-      background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-      border-radius: 20px;
-      padding: 2px 10px;
-      font-size: 0.75rem;
-      margin-left: 10px;
-      display: inline-block;
-    }
-
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: rgba(237, 242, 247, 0.7);
-    }
-
-    .dark-mode ::-webkit-scrollbar-track {
-      background: rgba(26, 32, 44, 0.5);
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: #4299e1;
-      border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: #3182ce;
-    }
-
-    .page-container {
-      display: none;
-      min-height: 100vh;
-    }
-
-    .page-container.active {
-      display: block;
-    }
-
-    .login-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-
-    .login-form {
-      width: 100%;
-      max-width: 400px;
-      padding: 30px;
-    }
-
-    .alert-error {
-      background: rgba(252, 129, 129, 0.2);
-      border: 1px solid rgba(252, 129, 129, 0.5);
-      color: #fc8181;
-    }
-
-    .dark-mode .alert-error {
-      background: rgba(252, 129, 129, 0.1);
-      border: 1px solid rgba(252, 129, 129, 0.3);
-    }
-
-    .alert-success {
-      background: rgba(72, 187, 120, 0.2);
-      border: 1px solid rgba(72, 187, 120, 0.5);
-      color: #68d391;
-    }
-
-    .dark-mode .alert-success {
-      background: rgba(72, 187, 120, 0.1);
-      border: 1px solid rgba(72, 187, 120, 0.3);
-    }
-
-    .alert-warning {
-      background: rgba(237, 137, 54, 0.2);
-      border: 1px solid rgba(237, 137, 54, 0.5);
-      color: #f6ad55;
-    }
-
-    .dark-mode .alert-warning {
-      background: rgba(237, 137, 54, 0.1);
-      border: 1px solid rgba(237, 137, 54, 0.3);
-    }
-
-    .user-info {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      z-index: 1000;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 10px 15px;
-      border-radius: 25px;
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      transition: background 0.3s ease, border 0.3s ease;
-    }
-
-    .dark-mode .user-info {
-      background: rgba(26, 32, 44, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .user-avatar {
-      width: 35px;
-      height: 35px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 14px;
-    }
-
-    .dashboard-header {
-      background: rgba(255, 255, 255, 0.9);
-      backdrop-filter: blur(10px);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-      padding: 15px 0;
-      margin-bottom: 20px;
-      transition: background 0.3s ease, border 0.3s ease;
-    }
-
-    .dark-mode .dashboard-header {
-      background: rgba(26, 32, 44, 0.9);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .loading-spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid transparent;
-      border-top: 2px solid currentColor;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    .connection-status {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      padding: 8px 15px;
-      border-radius: 20px;
-      font-size: 0.875rem;
-      z-index: 1000;
-      transition: all 0.3s ease;
-    }
-
-    .connection-online {
-      background: rgba(72, 187, 120, 0.3);
-      border: 1px solid rgba(72, 187, 120, 0.5);
-      color: #68d391;
-    }
-
-    .dark-mode .connection-online {
-      background: rgba(72, 187, 120, 0.2);
-    }
-
-    .connection-offline {
-      background: rgba(245, 101, 101, 0.3);
-      border: 1px solid rgba(245, 101, 101, 0.5);
-      color: #fc8181;
-    }
-
-    .dark-mode .connection-offline {
-      background: rgba(245, 101, 101, 0.2);
-    }
-
-    /* Mobile Responsive */
-    @media (max-width: 640px) {
-      .user-info {
-        position: relative;
-        top: auto;
-        right: auto;
-        justify-content: center;
-        margin-bottom: 20px;
-      }
-
-      .tally {
-        font-size: 14px;
-        letter-spacing: 1px;
-      }
-
-      .btn {
-        padding: 8px 12px;
-        font-size: 0.875rem;
-      }
-
-      .card {
-        margin: 10px;
-      }
-
-      .admin-form {
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .admin-form input {
-        margin-bottom: 10px;
-      }
-
-      table {
-        font-size: 0.875rem;
-      }
-
-      .table-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-        justify-content: center;
-      }
-
-      .table-actions .btn {
-        padding: 6px 10px;
-        font-size: 0.75rem;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .login-form {
-        padding: 20px;
-        margin: 10px;
-      }
-
-      h1 {
-        font-size: 1.875rem;
-      }
-
-      .admin-badge {
-        display: block;
-        margin: 10px auto;
-        text-align: center;
-        width: fit-content;
-      }
-    }
-
-    /* Theme Toggle Button - Responsive Positioning */
-    .theme-toggle {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      z-index: 1000;
-      width: auto;
-    }
-
-    @media (max-width: 640px) {
-      .theme-toggle {
-        bottom: 15px;
-        left: 15px;
-      }
-    }
-
-    /* Modern Chart Icon */
-    .chart-icon {
-      display: inline-block;
-      font-size: 1.5em;
-      margin-right: 0.5rem;
-      vertical-align: middle;
-      background: linear-gradient(135deg, #4299e1 0%, #9f7aea 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-    }
-
-    /* Auto-hide guest alert */
-    .guest-alert {
-      position: relative;
-      animation: slideIn 0.5s ease, fadeOut 0.5s ease 5s forwards;
-    }
-
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(-20px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hitung Suara Realtime</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" type="image/png" href="https://img.icons8.com/ios-filled/50/4a90e2/combo-chart--v1.png">
+
+
+
+
+    <style>
+        :root {
+            --light-bg: #f7fafc;
+            --light-text: #2d3748;
+            --light-card: #ffffff;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            color: #2d3748;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        body.dark-mode {
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            color: #e2e8f0;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .dark-mode .card {
+            background: rgba(26, 32, 44, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn {
+            transition: all 0.3s ease;
+            border-radius: 12px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 12px 20px;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border: 2px solid rgba(66, 153, 225, 0.7);
+            color: #4299e1;
+        }
+
+        .form-input {
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #e2e8f0;
+            color: #2d3748;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            width: 100%;
+            padding: 14px 16px;
+        }
+
+        .dark-mode .form-input {
+            background: rgba(45, 55, 72, 0.7);
+            border: 2px solid rgba(74, 85, 104, 0.5);
+            color: #e2e8f0;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+        }
+
+        .alert {
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 12px 0;
+            display: none;
+        }
+
+        .alert-success {
+            background: rgba(72, 187, 120, 0.15);
+            border: 2px solid rgba(72, 187, 120, 0.3);
+            color: #38a169;
+        }
+
+        .alert-error {
+            background: rgba(245, 101, 101, 0.15);
+            border: 2px solid rgba(245, 101, 101, 0.3);
+            color: #e53e3e;
+        }
+
+        .alert-warning {
+            background: rgba(237, 137, 54, 0.15);
+            border: 2px solid rgba(237, 137, 54, 0.3);
+            color: #dd6b20;
+        }
+
+        .alert-info {
+            background: rgba(66, 153, 225, 0.15);
+            border: 2px solid rgba(66, 153, 225, 0.3);
+            color: #3182ce;
+        }
+
+        .badge {
+            border-radius: 20px;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .superadmin-badge {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            color: white;
+        }
+
+        .vip-badge {
+            background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+            color: white;
+        }
+
+        .status-badge {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .status-waiting {
+            background: rgba(237, 137, 54, 0.15);
+            border: 2px solid rgba(237, 137, 54, 0.3);
+            color: #ed8936;
+        }
+
+        .status-live {
+            background: rgba(72, 187, 120, 0.15);
+            border: 2px solid rgba(72, 187, 120, 0.3);
+            color: #48bb78;
+        }
+
+        .quota-badge {
+            background: rgba(66, 153, 225, 0.15);
+            border: 2px solid rgba(66, 153, 225, 0.3);
+            color: #3182ce;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+
+        .page-container {
+            display: none;
+            min-height: 100vh;
+        }
+
+        .page-container.active {
+            display: block;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+
+        .user-info {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+        }
+
+        .dark-mode .user-info {
+            background: rgba(26, 32, 44, 0.95);
+        }
+
+        .user-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .tally {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2px;
+            font-size: 0.75rem;
+        }
+
+        .tally span {
+            white-space: nowrap;
+        }
+
+
+
+        .tally span.five {
+            text-decoration: line-through;
+            color: #f56565;
+            font-weight: bold;
+        }
+
+        .table-row {
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .dark-mode .table-row {
+            border-bottom: 1px solid rgba(74, 85, 104, 0.3);
+        }
+
+        /* .hidden {
+            display: none !important;
+        } */
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .dark-mode .modal-content {
+            background: #2d3748;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #718096;
+        }
+
+        .connection-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            opacity: 0.8;
+        }
+
+
+        /* Tambahkan di bagian CSS */
+        .coming-soon-container {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .countdown-number {
+            font-size: 3rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Animasi untuk coming soon page */
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+    </style>
 </head>
 
 <body>
-  <!-- Tombol Dark Mode - Posisi Responsif -->
-  <div class="theme-toggle">
-    <button onclick="toggleDarkMode()" class="btn btn-ghost px-3 py-2">
-      <i id="themeIcon" class="fas fa-moon"></i>
-    </button>
-  </div>
-
-  <!-- Halaman Dashboard (Default) -->
-  <div id="dashboardPage" class="page-container active">
-    <div class="dashboard-header">
-      <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
-        <h1 class="text-2xl sm:text-4xl font-bold header-glow">
-          <span class="chart-icon">
-            <i class="fas fa-chart-pie"></i>
-          </span>
-          Hitung Suara Realtime
-        </h1>
-        <button onclick="showLogin()" class="btn btn-ghost px-4 py-2">
-          <i class="fas fa-sign-in-alt"></i>
-          <span class="hidden sm:inline">Login Admin</span>
+    <!-- Theme Toggle -->
+    <div class="theme-toggle">
+        <button onclick="toggleDarkMode()" class="btn btn-ghost">
+            <i id="themeIcon" class="fas fa-moon"></i>
         </button>
-      </div>
     </div>
 
-    <div class="max-w-6xl mx-auto px-4">
-      <p class="text-center text-gray-400 mb-8">Pemantauan hasil pemungutan suara ketua paguyuban Marison Regency Jeruk
-        Sawit secara realtime</p>
-
-      <div class="alert alert-warning guest-alert" id="guestAlert">
-        <i class="fas fa-info-circle mr-2"></i>
-        Anda sedang melihat dalam mode guest. Login sebagai admin untuk mengelola kandidat dan suara.
-      </div>
-
-      <div class="card overflow-hidden mb-8">
-        <div class="overflow-x-auto">
-          <table class="w-full border-collapse">
-            <thead>
-              <tr class="bg-gradient-to-r from-blue-700 to-blue-800 text-white">
-                <th class="p-3 sm:p-4 text-left">No</th>
-                <th class="p-3 sm:p-4 text-left">Kandidat</th>
-                <th class="p-3 sm:p-4 text-center">Suara</th>
-                <th class="p-3 sm:p-4 text-center hidden sm:table-cell">Tally Marks</th>
-              </tr>
-            </thead>
-            <tbody id="guestKandidatBody"></tbody>
-          </table>
+    <!-- VIP Password Modal -->
+    <div id="vipModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-crown mr-2 text-yellow-500"></i>
+                    VIP Access
+                </h3>
+                <button onclick="closeVipModal()" class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <p class="text-gray-600 dark:text-gray-300 mb-4">
+                    Masukkan sandi VIP untuk mengakses fitur realtime
+                </p>
+                <input type="password" id="vipPassword" class="form-input mb-4" placeholder="Masukkan sandi VIP">
+                <button onclick="verifyVipAccess()" class="btn btn-warning w-full">
+                    <i class="fas fa-unlock mr-2"></i>
+                    Akses VIP
+                </button>
+            </div>
+            <div class="alert alert-error" id="vipError"></div>
         </div>
-      </div>
-
-      <div id="guestChart" class="card p-4 sm:p-6">
-        <h2 class="text-xl sm:text-2xl font-semibold mb-4 text-center">
-          <span class="chart-icon">
-            <i class="fas fa-analytics"></i>
-          </span>
-          Grafik Perolehan Suara
-        </h2>
-        <div class="chart-container">
-          <canvas id="guestChartSuara"></canvas>
-        </div>
-      </div>
-
-      <footer class="text-center text-gray-500 mt-12 text-sm px-4">
-        <p>© 2025 Sistem Hitung Suara Realtime. G-Project Studio.</p>
-      </footer>
-    </div>
-  </div>
-
-  <!-- Halaman Login -->
-  <div id="loginPage" class="page-container">
-    <div class="login-container">
-      <div class="card login-form">
-        <div class="text-center mb-6">
-          <button onclick="showDashboard()" class="btn btn-ghost mb-4">
-            <i class="fas fa-arrow-left"></i>
-            Kembali ke Dashboard
-          </button>
-        </div>
-
-        <h2 class="text-2xl sm:text-3xl font-bold text-center mb-2 header-glow">🔐 Login Admin</h2>
-        <p class="text-center text-gray-400 mb-6">Masuk untuk mengelola sistem penghitungan suara</p>
-
-        <div class="mb-4">
-          <label class="block text-gray-300 mb-2">Email</label>
-          <input type="email" id="email" class="form-input p-3" placeholder="alamat@email.com">
-        </div>
-
-        <div class="mb-6">
-          <label class="block text-gray-300 mb-2">Password</label>
-          <input type="password" id="password" class="form-input p-3" placeholder="••••••••">
-        </div>
-
-        <button onclick="login()" id="loginBtn" class="btn btn-primary w-full py-3 mb-4">
-          <span id="loginBtnText">Masuk</span>
-          <div id="loginSpinner" class="loading-spinner hidden"></div>
-        </button>
-
-        <div class="alert alert-error" id="loginError"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Halaman Admin -->
-  <div id="adminPage" class="page-container">
-    <div class="user-info">
-      <div class="user-avatar" id="userAvatar"></div>
-      <span id="userEmail" class="text-sm hidden sm:inline"></span>
-      <button onclick="logout()" class="btn btn-danger py-2 px-2">
-        <i class="fas fa-sign-out-alt"></i>
-        <span class="hidden sm:inline">Logout</span>
-      </button>
     </div>
 
-    <div class="max-w-6xl mx-auto px-4 pt-20">
-      <h1 class="text-2xl sm:text-4xl font-bold text-center mb-2 header-glow">
-        <span class="chart-icon">
-          <i class="fas fa-chart-pie"></i>
-        </span>
-        Hitung Suara Realtime
-        <span class="admin-badge">ADMIN MODE</span>
-      </h1>
-      <p class="text-center text-gray-400 mb-8">Panel administrasi sistem penghitungan suara ketua paguyuban Marison
-        Regency Jeruk Sawit</p>
+    <!-- VIP Settings Modal -->
+    <div id="vipSettingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-cog mr-2 text-yellow-500"></i>
+                    Pengaturan VIP
+                </h3>
+                <button onclick="closeVipSettingsModal()" class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <div class="mb-4">
+                    <label class="block text-gray-700 dark:text-gray-300 mb-2">Sandi VIP Baru</label>
+                    <input type="password" id="newVipPassword" class="form-input" placeholder="Sandi VIP baru">
+                </div>
+                <button onclick="updateVipPassword()" class="btn btn-warning w-full">
+                    <i class="fas fa-save mr-2"></i>
+                    Update Sandi VIP
+                </button>
+            </div>
+            <div class="alert alert-success" id="vipSettingsSuccess"></div>
+            <div class="alert alert-error" id="vipSettingsError"></div>
+        </div>
+    </div>
 
-      <div class="alert alert-success" id="successAlert"></div>
-      <div class="alert alert-error" id="errorAlert"></div>
+    <!-- Dashboard Page -->
+    <div id="dashboardPage" class="page-container">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold mb-2">
+                    <i class="fas fa-vote-yea text-blue-500 mr-2"></i>
+                    Hitung Suara Realtime
+                </h1>
+                <div class="flex justify-center gap-2 mt-4">
+                    <span id="systemStatusBadge" class="badge status-waiting">
+                        <i class="fas fa-pause-circle"></i>
+                        <span>System Stopped</span>
+                    </span>
+                    <span id="quotaBadge" class="badge quota-badge hidden">
+                        <i class="fas fa-users"></i>
+                        <span id="quotaText">Kuota: -/-</span>
+                    </span>
+                </div>
+            </div>
 
-      <!-- Form tambah kandidat -->
-      <div class="mb-6 card p-4">
-        <div class="admin-form flex flex-col sm:flex-row gap-3 justify-center items-center">
-          <input type="text" id="newKandidat" placeholder="Nama kandidat" class="form-input p-3 sm:w-72">
-          <div class="flex gap-2 w-full sm:w-auto">
-            <button onclick="tambahKandidat()" class="btn btn-success px-4 py-3 flex-1 sm:flex-none">
-              <i class="fas fa-plus"></i>
-              <span class="hidden sm:inline">Tambah</span>
+            <!-- Action Buttons -->
+            <div class="flex justify-end mb-6">
+                <button onclick="showLogin()" class="btn btn-primary">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Login
+                </button>
+            </div>
+
+            <!-- Status Alert -->
+            <div class="alert alert-warning mb-6" id="statusAlert">
+                <i class="fas fa-info-circle mr-2"></i>
+                <span id="statusText">System stopped - Data static</span>
+            </div>
+
+            <!-- Refresh Button -->
+            <div class="flex justify-center mb-6">
+                <button onclick="refreshData()" class="btn btn-ghost">
+                    <i class="fas fa-sync-alt"></i>
+                    Refresh Data
+                </button>
+            </div>
+
+            <!-- Candidates Table -->
+            <div class="card overflow-hidden mb-8">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                                <th class="p-4 text-left" style="width:5%">No</th>
+                                <th class="p-4 text-left" style="width:15%">Kandidat</th>
+                                <th class="p-4 text-center" style="width: 10%;">Suara</th>
+                                <th class="p-4 text-center hidden lg:table-cell" style="width: 20%;">Tally Marks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="guestKandidatBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="card p-6">
+                <h2 class="text-xl font-semibold mb-4 text-center">
+                    <i class="fas fa-chart-bar text-blue-500 mr-2"></i>
+                    Grafik Perolehan Suara
+                </h2>
+                <div class="chart-container">
+                    <canvas id="guestChartSuara"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Page -->
+    <div id="loginPage" class="page-container">
+        <div class="min-h-screen flex items-center justify-center px-4">
+            <div class="card p-8 max-w-md w-full">
+                <button onclick="showDashboard()" class="btn btn-ghost mb-6 w-full">
+                    <i class="fas fa-arrow-left"></i>
+                    Kembali ke Dashboard
+                </button>
+
+                <div class="text-center mb-6">
+                    <div class="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-lock text-white text-xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold mb-2">Login Sistem</h2>
+                    <p class="text-gray-500">Pilih jenis akses</p>
+                </div>
+
+                <!-- VIP Access Button -->
+                <button onclick="showVipModal()" class="btn btn-warning w-full py-4 mb-4">
+                    <i class="fas fa-crown mr-2"></i>
+                    VIP Access
+                    <br>
+                    <small class="text-xs opacity-80">Akses realtime dengan sandi</small>
+                </button>
+
+                <!-- Admin Login -->
+                <div class="border-t pt-6">
+                    <h3 class="text-lg font-semibold mb-4 text-center">Super Admin</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-gray-700 dark:text-gray-300 mb-2">Email</label>
+                            <input type="email" id="adminEmail" class="form-input" placeholder="admin@domain.com">
+                        </div>
+
+                        <div>
+                            <label class="block text-gray-700 dark:text-gray-300 mb-2">Password</label>
+                            <input type="password" id="adminPassword" class="form-input" placeholder="••••••••">
+                        </div>
+
+                        <button onclick="loginAsAdmin()" id="loginBtn" class="btn btn-primary w-full py-3">
+                            <span id="loginBtnText">Login sebagai Admin</span>
+                            <div id="loginSpinner" class="loading-spinner hidden"></div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="alert alert-error mt-4" id="loginError"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tambahkan ini setelah halaman Login Page dan sebelum Admin Page -->
+    <!-- Coming Soon Page -->
+    <div id="comingSoonPage" class="page-container">
+        <div class="min-h-screen flex items-center justify-center px-4">
+            <div class="text-center max-w-2xl">
+                <!-- Logo/Icon -->
+                <div
+                    class="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
+                    <i class="fas fa-vote-yea text-white text-3xl"></i>
+                </div>
+
+                <!-- Title -->
+                <h1
+                    class="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    Coming Soon
+                </h1>
+
+                <!-- Description -->
+                <p class="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
+                    Sistem penghitungan suara realtime akan segera dimulai.
+                    <span class="block text-lg text-gray-500 dark:text-gray-400 mt-2">
+                        Pantau halaman ini untuk update terbaru.
+                    </span>
+                </p>
+
+                <!-- Status Info -->
+                <div
+                    class="bg-white dark:bg-gray-800 rounded-2xl p-6 mb-8 shadow-lg border border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-center gap-4 mb-4">
+                        <div class="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                        <span class="text-lg font-semibold text-gray-700 dark:text-gray-300">System Status</span>
+                        <div class="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-400 mb-4">
+                        Sistem saat ini dalam mode persiapan. Penghitungan suara akan dimulai segera.
+                    </p>
+                    <!-- <div class="badge status-waiting text-lg py-2 px-4">
+                        <i class="fas fa-clock mr-2"></i>
+                        Menunggu Dimulai
+                    </div> -->
+                </div>
+
+                <!-- Countdown Timer (optional) -->
+                <div
+                    class="mt-12 p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-900 rounded-2xl border border-blue-200 dark:border-gray-700">
+                    <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">
+                        <i class="fas fa-clock mr-2 text-blue-500"></i>
+                        Perkiraan Waktu Mulai
+                    </h3>
+                    <div class="flex justify-center gap-4 text-center">
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
+                            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">--</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Jam</div>
+                        </div>
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
+                            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">--</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Menit</div>
+                        </div>
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
+                            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">--</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Detik</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contact Info -->
+                <div class="mt-12 text-center">
+                    <p class="text-gray-500 dark:text-gray-400 mb-4">
+                        Untuk Info Lebih Lanjut Hubungi Panitia Pemilu Marison Regency Jeruk Sawit
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Page -->
+    <div id="adminPage" class="page-container">
+        <!-- User Info -->
+        <div class="user-info">
+            <div class="user-avatar" id="userAvatar">A</div>
+            <div class="hidden sm:block">
+                <div id="userEmail" class="text-sm font-semibold"></div>
+            </div>
+            <button onclick="logout()" class="btn btn-danger py-1 px-3 text-sm">
+                <i class="fas fa-sign-out-alt"></i>
+                Logout
             </button>
-            <button onclick="resetSemua()" class="btn btn-danger px-4 py-3 flex-1 sm:flex-none">
-              <i class="fas fa-refresh"></i>
-              <span class="hidden sm:inline">Reset</span>
-            </button>
-          </div>
         </div>
-      </div>
 
-      <div class="card overflow-hidden mb-8">
-        <div class="overflow-x-auto">
-          <table class="w-full border-collapse">
-            <thead>
-              <tr class="bg-gradient-to-r from-blue-700 to-blue-800 text-white">
-                <th class="p-3 sm:p-4 text-center">No.</th>
-                <th class="p-3 sm:p-4 text-left">Kandidat</th>
-                <th class="p-3 sm:p-4 text-center">Suara</th>
-                <th class="p-3 sm:p-4 text-center hidden sm:table-cell">Tally Marks</th>
-                <th class="p-3 sm:p-4 text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody id="adminKandidatBody"></tbody>
-          </table>
+        <div class="max-w-7xl mx-auto px-4 py-8 pt-20">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold mb-2">
+                    <i class="fas fa-user-shield text-orange-500 mr-2"></i>
+                    Admin Panel
+                </h1>
+                <div class="flex justify-center gap-2 mt-4">
+                    <span class="badge superadmin-badge">SUPER ADMIN</span>
+                    <span id="adminQuotaBadge" class="badge quota-badge">
+                        <i class="fas fa-users"></i>
+                        <span id="adminQuotaText">Kuota: -/-</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Connection Stats -->
+            <div class="card p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold">Statistik Koneksi</h3>
+                    <button onclick="showVipSettingsModal()" class="btn btn-warning">
+                        <i class="fas fa-cog mr-2"></i>
+                        Pengaturan VIP
+                    </button>
+                </div>
+                <div class="connection-stats">
+                    <div class="stat-card">
+                        <div id="vipCount" class="stat-value text-yellow-500">0</div>
+                        <div class="stat-label">VIP Aktif</div>
+                    </div>
+                    <div class="stat-card">
+                        <div id="guestCount" class="stat-value text-blue-500">0</div>
+                        <div class="stat-label">Guest Aktif</div>
+                    </div>
+                    <div class="stat-card">
+                        <div id="totalCount" class="stat-value text-green-500">0</div>
+                        <div class="stat-label">Total Koneksi</div>
+                    </div>
+                    <div class="stat-card">
+                        <div id="availableQuota" class="stat-value text-purple-500">0</div>
+                        <div class="stat-label">Kuota Tersedia</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Control -->
+            <div class="card p-6 mb-6">
+                <div class="flex flex-col lg:flex-row justify-between items-center gap-4">
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">Kontrol Sistem</h3>
+                        <p class="text-gray-500" id="systemStatusText">Status: System Stopped</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="startSystem()" id="startBtn" class="btn btn-success">
+                            <i class="fas fa-play"></i>
+                            Start System
+                        </button>
+                        <button onclick="stopSystem()" id="stopBtn" class="btn btn-warning hidden">
+                            <i class="fas fa-pause"></i>
+                            Stop System
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts -->
+            <div class="alert alert-success mb-4" id="successAlert"></div>
+            <div class="alert alert-error mb-4" id="errorAlert"></div>
+
+            <!-- Add Candidate Form -->
+            <div class="card p-6 mb-6">
+                <h3 class="text-xl font-bold mb-4">Tambah Kandidat</h3>
+                <div class="flex flex-col lg:flex-row gap-4 items-center">
+                    <input type="text" id="newKandidat" placeholder="Nama kandidat" class="form-input flex-1">
+                    <div class="flex gap-2 w-full lg:w-auto">
+                        <button onclick="tambahKandidat()" class="btn btn-success flex-1">
+                            <i class="fas fa-plus"></i>
+                            Tambah
+                        </button>
+                        <button onclick="resetSemua()" class="btn btn-danger flex-1">
+                            <i class="fas fa-refresh"></i>
+                            Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Candidates Table -->
+            <div class="card overflow-hidden mb-8">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                                <th class="p-4 text-center" style="width:5%">No</th>
+                                <th class="p-4 text-left" style="width:15%">Kandidat</th>
+                                <th class="p-4 text-center" style="width:10%">Suara</th>
+                                <th class="p-4 text-center hidden lg:table-cell" style="width:20%">Tally Marks</th>
+                                <th class="p-4 text-center" style="width:10%">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminKandidatBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="card p-6">
+                <h2 class="text-xl font-semibold mb-4 text-center">Grafik Perolehan Suara</h2>
+                <div class="chart-container">
+                    <canvas id="adminChartSuara"></canvas>
+                </div>
+            </div>
         </div>
-      </div>
-
-      <div class="card p-4 sm:p-6">
-        <h2 class="text-xl sm:text-2xl font-semibold mb-4 text-center">
-          <span class="chart-icon">
-            <i class="fas fa-analytics"></i>
-          </span>
-          Grafik Perolehan Suara
-        </h2>
-        <div class="chart-container">
-          <canvas id="adminChartSuara"></canvas>
-        </div>
-      </div>
-
-      <footer class="text-center text-gray-500 mt-12 text-sm">
-        <p>© 2025 Sistem Hitung Suara Realtime. G-Project Studio.</p>
-      </footer>
     </div>
-  </div>
 
-  <!-- Status Koneksi -->
-  <div id="connectionStatus" class="connection-status connection-online">
-    <i class="fas fa-wifi mr-1"></i>
-    <span>Online</span>
-  </div>
+    <script>
+        // === Firebase Configuration ===
+        const firebaseConfig = {
+            apiKey: "AIzaSyB0D0iSWh9CoOsaXB2pajE5oWozbdcK49g",
+            authDomain: "hitung-suara-realtime.firebaseapp.com",
+            databaseURL: "https://hitung-suara-realtime-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "hitung-suara-realtime",
+            storageBucket: "hitung-suara-realtime.appspot.com",
+            messagingSenderId: "612258190112",
+            appId: "1:612258190112:web:8cb4666a35d5cbd7c6bd45",
+            measurementId: "G-P1RCZHTKYF"
+        };
 
-  <script>
-    // === 1. Konfigurasi Firebase ===
-    const firebaseConfig = {
-      apiKey: "AIzaSyB0D0iSWh9CoOsaXB2pajE5oWozbdcK49g",
-      authDomain: "hitung-suara-realtime.firebaseapp.com",
-      databaseURL: "https://hitung-suara-realtime-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "hitung-suara-realtime",
-      storageBucket: "hitung-suara-realtime.appspot.com",
-      messagingSenderId: "612258190112",
-      appId: "1:612258190112:web:8cb4666a35d5cbd7c6bd45",
-      measurementId: "G-P1RCZHTKYF"
-    };
-
-    let app;
-    let db;
-    let auth;
-    let kandidatRef;
-
-    try {
-      app = firebase.initializeApp(firebaseConfig);
-      db = firebase.database();
-      auth = firebase.auth();
-      kandidatRef = db.ref("kandidat");
-    } catch (error) {
-      console.error("Firebase initialization error:", error);
-      showAlert('error', 'Gagal menginisialisasi Firebase: ' + error.message);
-    }
-
-    // === 2. Variabel Global ===
-    let currentUser = null;
-    let isAdmin = false;
-    let adminChart = null;
-    let guestChart = null;
-    let connectionStatusEl = document.getElementById('connectionStatus');
-
-    // === 3. Manajemen Halaman ===
-    function showPage(pageId) {
-      document.querySelectorAll('.page-container').forEach(page => {
-        page.classList.remove('active');
-      });
-      document.getElementById(pageId).classList.add('active');
-    }
-
-    function showDashboard() {
-      showPage('dashboardPage');
-      // Tampilkan alert guest dengan animasi
-      const guestAlert = document.getElementById('guestAlert');
-      guestAlert.style.display = 'block';
-      guestAlert.classList.add('guest-alert');
-
-      // Sembunyikan alert setelah 5 detik
-      setTimeout(() => {
-        guestAlert.style.display = 'none';
-      }, 5000);
-    }
-
-    function showLogin() {
-      showPage('loginPage');
-      // Reset form
-      document.getElementById('email').value = '';
-      document.getElementById('password').value = '';
-      hideAlert('loginError');
-    }
-
-    function showAdmin() {
-      showPage('adminPage');
-      hideAlert('guestAlert');
-    }
-
-    // === 4. Manajemen Alert ===
-    function showAlert(type, message, alertId = null) {
-      const alertElement = alertId ? document.getElementById(alertId) :
-        document.querySelector(`.alert-${type}`);
-
-      if (alertElement) {
-        alertElement.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-triangle' :
-          type === 'success' ? 'check-circle' : 'info-circle'} mr-2"></i>${message}`;
-        alertElement.style.display = 'block';
-
-        // Auto hide after 5 seconds
-        setTimeout(() => {
-          alertElement.style.display = 'none';
-        }, 5000);
-      }
-    }
-
-    function hideAlert(alertId) {
-      const alertElement = typeof alertId === 'string' ?
-        document.getElementById(alertId) : alertId;
-      if (alertElement) {
-        alertElement.style.display = 'none';
-      }
-    }
-
-    // === 5. Manajemen Koneksi ===
-    function updateConnectionStatus(isOnline) {
-      if (connectionStatusEl) {
-        connectionStatusEl.className = `connection-status ${isOnline ? 'connection-online' : 'connection-offline'}`;
-        connectionStatusEl.innerHTML = `<i class="fas fa-${isOnline ? 'wifi' : 'wifi-slash'} mr-1"></i>
-        <span>${isOnline ? 'Online' : 'Offline'}</span>`;
-      }
-    }
-
-    // Monitor koneksi Firebase
-    if (db) {
-      const connectedRef = db.ref(".info/connected");
-      connectedRef.on("value", (snap) => {
-        updateConnectionStatus(snap.val() === true);
-      });
-    }
-
-    // === 6. Authentikasi ===
-    if (auth) {
-      auth.onAuthStateChanged(user => {
+        // Initialize Firebase
+        let app, db, auth, kandidatRef, systemRef, connectionsRef, settingsRef;
         try {
-          if (user) {
-            currentUser = user;
-            isAdmin = true;
-            document.getElementById('userAvatar').textContent = user.email.charAt(0).toUpperCase();
-            // document.getElementById('userEmail').textContent = user.email;
-            showAdmin();
-            showAlert('success', `Selamat datang, ${user.email}!`, 'successAlert');
-          } else {
-            currentUser = null;
-            isAdmin = false;
-            showDashboard();
-          }
+            app = firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+            auth = firebase.auth();
+            kandidatRef = db.ref("kandidat");
+            systemRef = db.ref("system");
+            connectionsRef = db.ref("connections");
+            settingsRef = db.ref("settings");
         } catch (error) {
-          console.error("Auth state change error:", error);
-          showAlert('error', 'Terjadi kesalahan saat memverifikasi status login', 'errorAlert');
+            console.error("Firebase init error:", error);
         }
-      });
-    }
 
-    function login() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      const loginBtn = document.getElementById('loginBtn');
-      const loginBtnText = document.getElementById('loginBtnText');
-      const loginSpinner = document.getElementById('loginSpinner');
+        // === Global Variables ===
+        let currentUser = null;
+        let currentRole = 'guest';
+        let systemStatus = "stopped";
+        let adminChart = null;
+        let guestChart = null;
+        let guestRealtimeListener = null;
+        let myConnectionId = null;
+        let connectionInterval = null;
 
-      // Validasi input
-      if (!email) {
-        showAlert('error', 'Email harus diisi', 'loginError');
-        return;
-      }
+        // Quota System
+        const MAX_CONCURRENT_USERS = 100;
+        const MAX_VIP_USERS = 1;
 
-      if (!password) {
-        showAlert('error', 'Password harus diisi', 'loginError');
-        return;
-      }
+        // Connection tracking state
+        let connectionStats = {
+            total: 0,
+            vip: 0,
+            guest: 0,
+            admin: 0,
+            available: 0
+        };
 
-      // Validasi format email
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        showAlert('error', 'Format email tidak valid', 'loginError');
-        return;
-      }
-
-      // Loading state
-      loginBtn.disabled = true;
-      loginBtnText.textContent = 'Memproses...';
-      loginSpinner.classList.remove('hidden');
-      hideAlert('loginError');
-
-      // Login dengan Firebase Auth
-      auth.signInWithEmailAndPassword(email, password)
-        .then((userCredential) => {
-          currentUser = userCredential.user;
-          hideAlert('loginError');
-        })
-        .catch((error) => {
-          console.error("Login error:", error);
-          let errorMessage = 'Terjadi kesalahan saat login';
-
-          switch (error.code) {
-            case 'auth/user-not-found':
-              errorMessage = 'Email tidak terdaftar';
-              break;
-            case 'auth/wrong-password':
-              errorMessage = 'Password salah';
-              break;
-            case 'auth/invalid-email':
-              errorMessage = 'Format email tidak valid';
-              break;
-            case 'auth/too-many-requests':
-              errorMessage = 'Terlalu banyak percobaan login. Coba lagi nanti';
-              break;
-            case 'auth/network-request-failed':
-              errorMessage = 'Gagal terhubung ke server. Periksa koneksi internet';
-              break;
-            default:
-              errorMessage = error.message;
-          }
-
-          showAlert('error', errorMessage, 'loginError');
-        })
-        .finally(() => {
-          // Reset loading state
-          loginBtn.disabled = false;
-          loginBtnText.textContent = 'Masuk';
-          loginSpinner.classList.add('hidden');
-        });
-    }
-
-    function logout() {
-      if (confirm('Yakin ingin logout?')) {
-        auth.signOut().then(() => {
-          currentUser = null;
-          isAdmin = false;
-          showDashboard();
-        }).catch((error) => {
-          console.error("Logout error:", error);
-          showAlert('error', 'Gagal logout: ' + error.message, 'errorAlert');
-        });
-      }
-    }
-
-    // === 7. Render Data ===
-    function renderKandidat(snapshot, isAdminView = false) {
-      const tbody = document.getElementById(isAdminView ? 'adminKandidatBody' : 'guestKandidatBody');
-      if (!tbody) return;
-
-      tbody.innerHTML = "";
-      const data = snapshot.val() || {};
-      const labels = [];
-      const values = [];
-      const colors = [
-        '#4299e1', '#48bb78', '#ed8936', '#f56565',
-        '#9f7aea', '#fbb6ce', '#4fd1c5', '#fc8181'
-      ];
-
-      const entries = Object.entries(data);
-
-      if (entries.length === 0) {
-        tbody.innerHTML = `
-          <tr class="table-row">
-            <td colspan="${isAdminView ? '4' : '3'}" class="p-8 text-center text-gray-400">
-              <i class="fas fa-inbox text-4xl mb-4 block"></i>
-              Belum ada kandidat yang terdaftar
-            </td>
-          </tr>`;
-      } else {
-        entries.forEach(([id, kandidat], index) => {
-          if (!kandidat || !kandidat.nama) return;
-
-          const suara = kandidat.suara || 0;
-          const colorIndex = index % colors.length;
-
-          row = document.createElement("tr");
-          row.className = "table-row";
-
-          row.innerHTML = `
-            <td class="p-3 sm:p-4 text-center font-bold">${index + 1}</td>
-            <td class="p-3 sm:p-4 font-semibold text-left">
-              <span class="inline-block w-4 h-4 sm:w-6 sm:h-6 rounded-full mr-2 sm:mr-3"
-                style="background: ${colors[colorIndex]}"></span>
-              <span class="text-sm sm:text-base">${kandidat.nama}</span>
-            </td>
-            <td class="p-3 sm:p-4 text-lg sm:text-2xl font-bold text-center">${suara}</td>
-            <td class="p-3 sm:p-4 tally hidden sm:table-cell">${buatTally(suara)}</td>
-            ${isAdminView ? `
-            <td class="p-3 sm:p-4">
-              <div class="table-actions" style="display:flex; gap:6px;">
-                <button onclick="ubahSuara('${id}', 1)" class="btn btn-primary px-1">
-                  <i class="fas fa-plus"></i>
-                  <span class="hidden sm:inline">1</span>
-                </button>
-                <button onclick="ubahSuara('${id}', -1)" class="btn btn-warning px-1">
-                  <i class="fas fa-minus"></i>
-                  <span class="hidden sm:inline">1</span>
-                </button>
-                <button onclick="hapusKandidat('${id}', '${kandidat.nama}')" class="btn btn-danger px-1">
-                  <i class="fas fa-trash"></i>
-                  <span class="hidden sm:inline">Hapus</span>
-                </button>
-              </div>
-            </td>` : ''}
-          `;
-
-          tbody.appendChild(row);
-
-          labels.push(kandidat.nama);
-          values.push(suara);
-        });
-      }
-
-      updateChart(labels, values, isAdminView);
-    }
-
-    function buatTally(jumlah) {
-      if (!jumlah) return "-";
-      let tally = "";
-      const fullGroups = Math.floor(jumlah / 5);
-      const remainder = jumlah % 5;
-
-      for (let i = 0; i < fullGroups; i++) {
-        tally += "<span class='five'>||||</span> ";
-      }
-
-      for (let i = 0; i < remainder; i++) {
-        tally += "|";
-      }
-
-      return tally || "-";
-    }
-
-    // === 8. Aksi Admin ===
-    function tambahKandidat() {
-      if (!isAdmin || !kandidatRef) {
-        showAlert('error', 'Hanya admin yang dapat menambah kandidat', 'errorAlert');
-        return;
-      }
-
-      const nama = document.getElementById("newKandidat").value.trim();
-      if (!nama) {
-        showAlert('error', 'Nama kandidat tidak boleh kosong', 'errorAlert');
-        return;
-      }
-
-      if (nama.length < 2) {
-        showAlert('error', 'Nama kandidat minimal 2 karakter', 'errorAlert');
-        return;
-      }
-
-      if (nama.length > 50) {
-        showAlert('error', 'Nama kandidat maksimal 50 karakter', 'errorAlert');
-        return;
-      }
-
-      // Cek duplikasi nama
-      kandidatRef.once("value")
-        .then(snapshot => {
-          const data = snapshot.val() || {};
-          const existingNames = Object.values(data).map(k => k.nama?.toLowerCase());
-
-          if (existingNames.includes(nama.toLowerCase())) {
-            showAlert('error', 'Nama kandidat sudah ada', 'errorAlert');
-            return;
-          }
-
-          // Tambah kandidat baru
-          return kandidatRef.push({
-            nama: nama,
-            suara: 0,
-            createdAt: firebase.database.ServerValue.TIMESTAMP
-          });
-        })
-        .then(() => {
-          document.getElementById("newKandidat").value = "";
-          showAlert('success', `Kandidat "${nama}" berhasil ditambahkan`, 'successAlert');
-        })
-        .catch(error => {
-          console.error("Error adding candidate:", error);
-          showAlert('error', 'Gagal menambah kandidat: ' + error.message, 'errorAlert');
-        });
-    }
-
-    function ubahSuara(id, delta) {
-      if (!isAdmin || !kandidatRef) {
-        showAlert('error', 'Hanya admin yang dapat mengubah suara', 'errorAlert');
-        return;
-      }
-
-      const ref = kandidatRef.child(id).child("suara");
-      ref.transaction(currentValue => {
-        const newValue = Math.max(0, (currentValue || 0) + delta);
-        return newValue;
-      })
-        .then(result => {
-          if (result.committed) {
-            const action = delta > 0 ? 'ditambah' : 'dikurangi';
-            showAlert('success', `Suara berhasil ${action}`, 'successAlert');
-          }
-        })
-        .catch(error => {
-          console.error("Error updating vote:", error);
-          showAlert('error', 'Gagal mengubah suara: ' + error.message, 'errorAlert');
-        });
-    }
-
-    function hapusKandidat(id, nama) {
-      if (!isAdmin || !kandidatRef) {
-        showAlert('error', 'Hanya admin yang dapat menghapus kandidat', 'errorAlert');
-        return;
-      }
-
-      if (confirm(`Yakin ingin menghapus kandidat "${nama}"?\nSemua suara akan hilang dan tidak dapat dikembalikan.`)) {
-        kandidatRef.child(id).remove()
-          .then(() => {
-            showAlert('success', `Kandidat "${nama}" berhasil dihapus`, 'successAlert');
-          })
-          .catch(error => {
-            console.error("Error deleting candidate:", error);
-            showAlert('error', 'Gagal menghapus kandidat: ' + error.message, 'errorAlert');
-          });
-      }
-    }
-
-    function resetSemua() {
-      if (!isAdmin || !kandidatRef) {
-        showAlert('error', 'Hanya admin yang dapat mereset suara', 'errorAlert');
-        return;
-      }
-
-      if (confirm("Yakin ingin mereset semua suara ke 0?\nTindakan ini tidak dapat dibatalkan.")) {
-        kandidatRef.once("value")
-          .then(snapshot => {
-            const updates = {};
-            snapshot.forEach(child => {
-              updates[`${child.key}/suara`] = 0;
-            });
-            return kandidatRef.update(updates);
-          })
-          .then(() => {
-            showAlert('success', 'Semua suara berhasil direset ke 0', 'successAlert');
-          })
-          .catch(error => {
-            console.error("Error resetting votes:", error);
-            showAlert('error', 'Gagal mereset suara: ' + error.message, 'errorAlert');
-          });
-      }
-    }
-
-    // === 9. Chart.js ===
-    function updateChart(labels, values, isAdminView = false) {
-      const chartId = isAdminView ? 'adminChartSuara' : 'guestChartSuara';
-      const canvas = document.getElementById(chartId);
-
-      if (!canvas) return;
-
-      const backgroundColors = [
-        'rgba(66, 153, 225, 0.7)',
-        'rgba(72, 187, 120, 0.7)',
-        'rgba(237, 137, 54, 0.7)',
-        'rgba(245, 101, 101, 0.7)',
-        'rgba(159, 122, 234, 0.7)',
-        'rgba(251, 182, 206, 0.7)',
-        'rgba(79, 209, 197, 0.7)',
-        'rgba(252, 129, 129, 0.7)'
-      ];
-
-      const borderColors = [
-        'rgba(66, 153, 225, 1)',
-        'rgba(72, 187, 120, 1)',
-        'rgba(237, 137, 54, 1)',
-        'rgba(245, 101, 101, 1)',
-        'rgba(159, 122, 234, 1)',
-        'rgba(251, 182, 206, 1)',
-        'rgba(79, 209, 197, 1)',
-        'rgba(252, 129, 129, 1)'
-      ];
-
-      const currentChart = isAdminView ? adminChart : guestChart;
-
-      if (!currentChart) {
-        try {
-          const ctx = canvas.getContext('2d');
-
-          Chart.defaults.color = '#2d3748';
-          Chart.defaults.font.family = "'Segoe UI', sans-serif";
-
-          const newChart = new Chart(ctx, {
-            type: "bar",
-            data: {
-              labels: labels,
-              datasets: [{
-                label: "Jumlah Suara",
-                data: values,
-                backgroundColor: backgroundColors.slice(0, labels.length),
-                borderColor: borderColors.slice(0, labels.length),
-                borderWidth: 2,
-                borderRadius: 6,
-                borderSkipped: false,
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  display: false
-                },
-                tooltip: {
-                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                  titleColor: '#2d3748',
-                  bodyColor: '#2d3748',
-                  borderColor: 'rgba(66, 153, 225, 0.5)',
-                  borderWidth: 1,
-                  cornerRadius: 8,
-                  displayColors: true,
-                  callbacks: {
-                    title: function (context) {
-                      return context[0].label;
-                    },
-                    label: function (context) {
-                      return `Suara: ${context.parsed.y}`;
-                    }
-                  }
-                }
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  grid: {
-                    color: 'rgba(226, 232, 240, 0.5)',
-                    drawBorder: false
-                  },
-                  ticks: {
-                    stepSize: 1,
-                    callback: function (value) {
-                      return Number.isInteger(value) ? value : '';
-                    }
-                  }
-                },
-                x: {
-                  grid: {
-                    display: false
-                  },
-                  ticks: {
-                    maxRotation: 45,
-                    minRotation: 0
-                  }
-                }
-              },
-              animation: {
-                duration: 500,
-                easing: 'easeInOutQuart'
-              }
+        // === Debug Utility ===
+        function debugLog(message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            if (data) {
+                console.log(`[${timestamp}] ${message}`, data);
+            } else {
+                console.log(`[${timestamp}] ${message}`);
             }
-          });
-
-          if (isAdminView) {
-            adminChart = newChart;
-          } else {
-            guestChart = newChart;
-          }
-
-          // Set canvas height
-          canvas.style.height = '400px';
-
-        } catch (error) {
-          console.error("Error creating chart:", error);
-          showAlert('error', 'Gagal membuat grafik: ' + error.message, isAdminView ? 'errorAlert' : null);
         }
-      } else {
-        try {
-          currentChart.data.labels = labels;
-          currentChart.data.datasets[0].data = values;
-          currentChart.data.datasets[0].backgroundColor = backgroundColors.slice(0, labels.length);
-          currentChart.data.datasets[0].borderColor = borderColors.slice(0, labels.length);
-          currentChart.update('active');
-        } catch (error) {
-          console.error("Error updating chart:", error);
+
+        // === Utility Functions ===
+        function showAlert(elementId, type, message) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                const icon = {
+                    'success': 'check-circle',
+                    'error': 'exclamation-triangle',
+                    'warning': 'info-circle',
+                    'info': 'info-circle'
+                }[type] || 'info-circle';
+
+                element.innerHTML = `<i class="fas fa-${icon} mr-2"></i>${message}`;
+                element.className = `alert alert-${type}`;
+                element.style.display = 'block';
+
+                if (type !== 'error') {
+                    setTimeout(() => hideAlert(elementId), 5000);
+                }
+            }
         }
-      }
-    }
 
-    // === 10. Event Listeners ===
-    document.addEventListener('DOMContentLoaded', function () {
-      // Enter key untuk login
-      document.getElementById('email')?.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-          document.getElementById('password').focus();
+        function hideAlert(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) element.style.display = 'none';
         }
-      });
 
-      document.getElementById('password')?.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-          login();
+        // === Modal Functions ===
+        function showVipModal() {
+            document.getElementById('vipModal').classList.add('active');
+            document.getElementById('vipPassword').value = '';
+            hideAlert('vipError');
         }
-      });
 
-      // Enter key untuk tambah kandidat
-      document.getElementById('newKandidat')?.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-          tambahKandidat();
+        function closeVipModal() {
+            document.getElementById('vipModal').classList.remove('active');
         }
-      });
 
-      // Handle offline/online events
-      window.addEventListener('online', () => updateConnectionStatus(true));
-      window.addEventListener('offline', () => updateConnectionStatus(false));
-    });
-
-    // === 11. Firebase Realtime Listeners ===
-    if (kandidatRef) {
-      // Listener untuk guest view
-      kandidatRef.on("value", (snapshot) => {
-        try {
-          renderKandidat(snapshot, false); // Guest view
-          if (isAdmin) {
-            renderKandidat(snapshot, true); // Admin view
-          }
-        } catch (error) {
-          console.error("Error rendering data:", error);
-          showAlert('error', 'Gagal memuat data: ' + error.message);
+        function showVipSettingsModal() {
+            document.getElementById('vipSettingsModal').classList.add('active');
+            document.getElementById('newVipPassword').value = '';
+            hideAlert('vipSettingsSuccess');
+            hideAlert('vipSettingsError');
         }
-      }, (error) => {
-        console.error("Firebase listener error:", error);
-        showAlert('error', 'Koneksi ke database terputus. Coba refresh halaman.');
-        updateConnectionStatus(false);
-      });
-    }
 
-    // === 12. Error Handling Global ===
-    window.addEventListener('error', function (e) {
-      console.error('Global error:', e.error);
-      showAlert('error', 'Terjadi kesalahan pada aplikasi. Silakan refresh halaman.');
-    });
-
-    window.addEventListener('unhandledrejection', function (e) {
-      console.error('Unhandled promise rejection:', e.reason);
-      showAlert('error', 'Terjadi kesalahan koneksi. Periksa internet Anda.');
-    });
-
-    // === 13. Konfigurasi Aturan Database ===
-    // Untuk mengatasi PERMISSION_DENIED, atur aturan database di Firebase Console:
-    /*
-    {
-      "rules": {
-        "kandidat": {
-          ".read": true,
-          ".write": "auth != null"
+        function closeVipSettingsModal() {
+            document.getElementById('vipSettingsModal').classList.remove('active');
         }
-      }
-    }
-    */
 
-    // === 14. Initialize app ===
-    function initializeApp() {
-      try {
-        // Show guest alert on dashboard
-        if (document.getElementById('dashboardPage').classList.contains('active')) {
-          // Tampilkan alert guest dengan animasi
-          setTimeout(() => {
-            const guestAlert = document.getElementById('guestAlert');
-            guestAlert.style.display = 'block';
-            guestAlert.classList.add('guest-alert');
+        // === Page Management ===
+        function showPage(pageId) {
+            document.querySelectorAll('.page-container').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById(pageId).classList.add('active');
+        }
 
-            // Sembunyikan alert setelah 5 detik
+        function showDashboard() {
+            // Jika user sudah login sebagai admin, jangan tunjukkan dashboard
+            if (currentUser && currentRole === 'admin') {
+                showAdmin();
+                return;
+            }
+
+            // Jika guest biasa dan system belum start, tampilkan coming soon
+            if (currentRole === 'guest' && systemStatus !== "started") {
+                showPage('comingSoonPage');
+            } else {
+                showPage('dashboardPage');
+            }
+
+            updateStatusAlert();
+        }
+
+        function showLogin() {
+            // Jika sudah login sebagai admin, redirect ke admin page
+            if (currentUser && currentRole === 'admin') {
+                showAdmin();
+                return;
+            }
+
+            showPage('loginPage');
+            hideAlert('loginError');
+        }
+
+        function showAdmin() {
+            showPage('adminPage');
+        }
+
+        function verifyVipAccess() {
+            const password = document.getElementById('vipPassword').value.trim();
+            if (!password) {
+                showAlert('vipError', 'error', 'Masukkan sandi VIP');
+                return;
+            }
+
+            // Coba akses settings dengan error handling
+            settingsRef.child('vipPassword').once('value').then((snapshot) => {
+                if (!snapshot.exists()) {
+                    // Jika VIP password belum ada, set default
+                    settingsRef.child('vipPassword').set('vip123')
+                        .then(() => {
+                            checkVipPassword(password);
+                        })
+                        .catch(error => {
+                            showAlert('vipError', 'error', 'Gagal setup sandi VIP: ' + error.message);
+                        });
+                } else {
+                    checkVipPassword(password, snapshot.val());
+                }
+            }).catch(error => {
+                showAlert('vipError', 'error', 'Error akses sandi VIP: ' + error.message);
+            });
+        }
+
+        function checkVipPassword(inputPassword, storedPassword = null) {
+            if (storedPassword === null) {
+                // Default password jika belum diset
+                storedPassword = 'vip123';
+            }
+
+            if (inputPassword === storedPassword) {
+                // Check VIP quota
+                if (connectionStats.vip >= MAX_VIP_USERS) {
+                    showAlert('vipError', 'error', 'Kuota VIP penuh');
+                    return;
+                }
+
+                currentRole = 'vip';
+                closeVipModal();
+                showDashboard();
+                showAlert('statusAlert', 'success', 'VIP Access activated! Realtime access guaranteed.');
+
+                setupGuestListener();
+
+                setTimeout(() => {
+                    tryReplaceOldestGuest();
+                }, 1000);
+
+            } else {
+                showAlert('vipError', 'error', 'Sandi VIP salah');
+            }
+        }
+
+        function updateVipPassword() {
+            const newPassword = document.getElementById('newVipPassword').value.trim();
+            if (!newPassword) {
+                showAlert('vipSettingsError', 'error', 'Masukkan sandi VIP baru');
+                return;
+            }
+
+            settingsRef.child('vipPassword').set(newPassword)
+                .then(() => {
+                    showAlert('vipSettingsSuccess', 'success', 'Sandi VIP berhasil diupdate');
+                    document.getElementById('newVipPassword').value = '';
+                })
+                .catch(error => {
+                    showAlert('vipSettingsError', 'error', 'Gagal update sandi: ' + error.message);
+                });
+        }
+
+        function refreshData() {
+            kandidatRef.once("value").then((snapshot) => {
+                renderKandidat(snapshot, currentRole === 'admin');
+                showAlert('statusAlert', 'info', 'Data refreshed manually');
+            });
+        }
+
+        // === Connection & Quota Management ===
+        function setupConnectionTracking() {
+            debugLog('Setting up connection tracking');
+
+            // Register connection pertama kali
+            registerConnection();
+
+            // Setup periodic connection refresh
+            connectionInterval = setInterval(() => {
+                if (myConnectionId) {
+                    updateConnection();
+                }
+            }, 15000); // Update every 15 seconds
+
+            // Listen untuk perubahan connections
+            connectionsRef.on("value", (snapshot) => {
+                processConnections(snapshot.val() || {});
+            });
+        }
+
+        function processConnections(connections) {
+            const now = Date.now();
+            const timeout = 45000; // 45 seconds timeout
+
+            let total = 0;
+            let vip = 0;
+            let guest = 0;
+            let admin = 0;
+
+            // Hitung connections aktif
+            Object.values(connections).forEach(conn => {
+                if (now - conn.timestamp <= timeout) {
+                    total++;
+                    if (conn.role === 'vip') vip++;
+                    else if (conn.role === 'guest') guest++;
+                    else if (conn.role === 'admin') admin++;
+                }
+            });
+
+            // Update stats
+            connectionStats = {
+                total,
+                vip,
+                guest,
+                admin,
+                available: MAX_CONCURRENT_USERS - total
+            };
+
+            debugLog('Connection stats updated', connectionStats);
+
+            updateQuotaDisplay();
+            updateConnectionStats();
+            updateStatusAlert();
+        }
+
+        function registerConnection() {
+            // Generate new connection ID
+            myConnectionId = generateConnectionId();
+            debugLog('Registering new connection', { id: myConnectionId, role: currentRole });
+
+            // Initial registration
+            updateConnection();
+
+            // Setup cleanup on page unload
+            setupConnectionCleanup();
+
+            return myConnectionId;
+        }
+
+        function updateConnection() {
+            if (!myConnectionId) return;
+
+            const connectionData = {
+                role: currentRole,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                userAgent: navigator.userAgent.substring(0, 30),
+                lastUpdate: new Date().toISOString()
+            };
+
+            connectionsRef.child(myConnectionId).set(connectionData)
+                .then(() => {
+                    debugLog('Connection updated', { id: myConnectionId, role: currentRole });
+                })
+                .catch(error => {
+                    debugLog('Error updating connection', error);
+                });
+        }
+
+        function setupConnectionCleanup() {
+            const cleanup = () => {
+                if (myConnectionId) {
+                    debugLog('Cleaning up connection', { id: myConnectionId });
+                    connectionsRef.child(myConnectionId).remove().catch(console.error);
+                    if (connectionInterval) {
+                        clearInterval(connectionInterval);
+                    }
+                }
+            };
+
+            window.addEventListener('beforeunload', cleanup);
+            window.addEventListener('pagehide', cleanup);
+            window.addEventListener('unload', cleanup);
+        }
+
+        function generateConnectionId() {
+            return 'conn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function updateQuotaDisplay() {
+            const quotaText = `Kuota: ${connectionStats.total}/${MAX_CONCURRENT_USERS}`;
+            const quotaElement = document.getElementById('quotaText');
+            const adminQuotaElement = document.getElementById('adminQuotaText');
+
+            if (quotaElement) quotaElement.textContent = quotaText;
+            if (adminQuotaElement) adminQuotaElement.textContent = quotaText;
+
+            const quotaBadge = document.getElementById('quotaBadge');
+            if (quotaBadge && systemStatus === "started") {
+                quotaBadge.classList.remove('hidden');
+            }
+        }
+
+        function updateConnectionStats() {
+            const elements = {
+                vipCount: document.getElementById('vipCount'),
+                guestCount: document.getElementById('guestCount'),
+                totalCount: document.getElementById('totalCount'),
+                availableQuota: document.getElementById('availableQuota')
+            };
+
+            if (elements.vipCount) elements.vipCount.textContent = connectionStats.vip;
+            if (elements.guestCount) elements.guestCount.textContent = connectionStats.guest;
+            if (elements.totalCount) elements.totalCount.textContent = connectionStats.total;
+            if (elements.availableQuota) elements.availableQuota.textContent = connectionStats.available;
+
+            debugLog('UI Stats updated', connectionStats);
+        }
+
+        function updateStatusAlert() {
+            const statusText = document.getElementById('statusText');
+            const statusAlert = document.getElementById('statusAlert');
+
+            if (!statusText || !statusAlert) return;
+
+            if (currentRole === 'vip') {
+                statusText.textContent = "VIP Access - Realtime active";
+                statusAlert.className = 'alert alert-success';
+            }
+            else if (currentRole === 'admin') {
+                statusText.textContent = "Admin Access - Full control";
+                statusAlert.className = 'alert alert-info';
+            }
+            else if (systemStatus === "started") {
+                if (connectionStats.available > 0) {
+                    statusText.textContent = `Realtime active! Quota available: ${connectionStats.available}`;
+                    statusAlert.className = 'alert alert-success';
+                } else {
+                    statusText.textContent = "Static mode - Quota full, refresh manually";
+                    statusAlert.className = 'alert alert-warning';
+                }
+            } else {
+                statusText.textContent = "Static mode - System stopped";
+                statusAlert.className = 'alert alert-warning';
+            }
+        }
+
+        function tryReplaceOldestGuest() {
+            // Only replace if we're at capacity and current user is VIP
+            if (connectionStats.total < MAX_CONCURRENT_USERS || currentRole !== 'vip') {
+                debugLog('No need to replace guest', {
+                    total: connectionStats.total,
+                    currentRole: currentRole
+                });
+                return;
+            }
+
+            debugLog('Attempting to replace oldest guest for VIP access');
+
+            connectionsRef.once("value").then((snapshot) => {
+                const connections = snapshot.val() || {};
+                const now = Date.now();
+                let oldestGuest = null;
+                let oldestTimestamp = now;
+
+                Object.entries(connections).forEach(([id, conn]) => {
+                    if (conn.role === 'guest' && conn.timestamp < oldestTimestamp) {
+                        oldestGuest = id;
+                        oldestTimestamp = conn.timestamp;
+                    }
+                });
+
+                if (oldestGuest) {
+                    debugLog('Replacing guest connection', { id: oldestGuest });
+                    connectionsRef.child(oldestGuest).remove()
+                        .then(() => {
+                            debugLog('Successfully replaced guest connection');
+                            // Update our connection after replacement
+                            setTimeout(updateConnection, 500);
+                        })
+                        .catch(error => {
+                            debugLog('Failed to replace guest', error);
+                        });
+                } else {
+                    debugLog('No guest connections available to replace');
+                }
+            }).catch(error => {
+                debugLog('Error finding oldest guest', error);
+            });
+        }
+
+        // === System Status Management ===
+        function initializeSystem() {
+            systemRef.child("status").once("value").then((snapshot) => {
+                if (!snapshot.exists()) {
+                    systemRef.child("status").set("stopped");
+                }
+            });
+
+            settingsRef.child('vipPassword').once('value').then((snapshot) => {
+                if (!snapshot.exists()) {
+                    settingsRef.child('vipPassword').set('vip123');
+                }
+            });
+        }
+
+        function checkSystemStatus() {
+            systemRef.child("status").on("value", (snapshot) => {
+                systemStatus = snapshot.val() || "stopped";
+                updateSystemUI();
+                setupGuestListener();
+
+                // Otomatis pindah halaman jika sistem start/stop
+                if (currentRole === 'guest') {
+                    if (systemStatus === "started" && document.getElementById('comingSoonPage').classList.contains('active')) {
+                        showPage('dashboardPage');
+                    } else if (systemStatus !== "started" && document.getElementById('dashboardPage').classList.contains('active')) {
+                        showPage('comingSoonPage');
+                    }
+                }
+            });
+        }
+
+        function updateSystemUI() {
+            const statusBadge = document.getElementById('systemStatusBadge');
+            const statusText = document.getElementById('systemStatusText');
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+
+            if (systemStatus === "started") {
+                if (statusBadge) {
+                    statusBadge.className = 'badge status-live';
+                    statusBadge.innerHTML = '<i class="fas fa-play-circle"></i><span>System Started</span>';
+                }
+                if (statusText) statusText.textContent = "Status: System Started";
+                if (startBtn) startBtn.classList.add('hidden');
+                if (stopBtn) stopBtn.classList.remove('hidden');
+            } else {
+                if (statusBadge) {
+                    statusBadge.className = 'badge status-waiting';
+                    statusBadge.innerHTML = '<i class="fas fa-pause-circle"></i><span>System Stopped</span>';
+                }
+                if (statusText) statusText.textContent = "Status: System Stopped";
+                if (startBtn) startBtn.classList.remove('hidden');
+                if (stopBtn) stopBtn.classList.add('hidden');
+            }
+
+            updateQuotaDisplay();
+            updateStatusAlert();
+        }
+
+        function setupGuestListener() {
+            // Remove previous listener
+            if (guestRealtimeListener) {
+                kandidatRef.off("value", guestRealtimeListener);
+                guestRealtimeListener = null;
+            }
+
+            debugLog('Setting up guest listener', {
+                role: currentRole,
+                systemStatus: systemStatus,
+                availableQuota: connectionStats.available,
+                user: currentUser ? currentUser.email : 'none'
+            });
+
+            // Jika user sudah login sebagai admin, selalu gunakan realtime
+            if (currentUser && currentRole === 'admin') {
+                debugLog('Setting up admin realtime listener');
+                guestRealtimeListener = kandidatRef.on("value", (snapshot) => {
+                    renderKandidat(snapshot, true);
+                });
+                updateConnection();
+                return;
+            }
+
+            // VIP & Admin always get realtime
+            if (currentRole === 'vip' || currentRole === 'admin') {
+                guestRealtimeListener = kandidatRef.on("value", (snapshot) => {
+                    renderKandidat(snapshot, currentRole === 'admin');
+                });
+                updateConnection();
+                return;
+            }
+
+            // Guests get realtime only when system started AND quota available
+            if (systemStatus === "started" && connectionStats.available > 0) {
+                guestRealtimeListener = kandidatRef.on("value", (snapshot) => {
+                    renderKandidat(snapshot, false);
+                });
+                updateConnection();
+            } else {
+                // Static mode - load data once
+                kandidatRef.once("value").then((snapshot) => {
+                    renderKandidat(snapshot, false);
+                });
+            }
+        }
+
+        function startSystem() {
+            systemRef.child("status").set("started")
+                .then(() => {
+                    showAlert('successAlert', 'success', 'System started! Guests can now access realtime.');
+                })
+                .catch((error) => {
+                    showAlert('errorAlert', 'error', 'Failed to start system: ' + error.message);
+                });
+        }
+
+        function stopSystem() {
+            systemRef.child("status").set("stopped")
+                .then(() => {
+                    showAlert('successAlert', 'success', 'System stopped. Guests back to static mode.');
+                })
+                .catch((error) => {
+                    showAlert('errorAlert', 'error', 'Failed to stop system: ' + error.message);
+                });
+        }
+
+        // === Authentication ===
+        function checkAuthState() {
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    // User is signed in
+                    currentUser = user;
+                    currentRole = 'admin';
+
+                    debugLog('User already logged in', { email: user.email });
+
+                    // Update UI
+                    const userAvatar = document.getElementById('userAvatar');
+                    const userEmail = document.getElementById('userEmail');
+
+                    if (userAvatar) userAvatar.textContent = user.email.charAt(0).toUpperCase();
+                    if (userEmail) userEmail.textContent = user.email;
+
+                    // Show admin page
+                    showAdmin();
+
+                    // Setup admin realtime listener
+                    kandidatRef.on("value", (snapshot) => {
+                        renderKandidat(snapshot, true);
+                    });
+
+                    // Update connection dengan role admin
+                    updateConnection();
+
+                } else {
+                    // User is signed out
+                    currentUser = null;
+                    currentRole = 'guest';
+                    debugLog('User logged out');
+
+                    // Show dashboard jika belum di admin page
+                    if (!document.getElementById('adminPage').classList.contains('active')) {
+                        showDashboard();
+                    }
+                }
+            });
+        }
+
+        function loginAsAdmin() {
+            const email = document.getElementById('adminEmail').value.trim();
+            const password = document.getElementById('adminPassword').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const loginBtnText = document.getElementById('loginBtnText');
+            const loginSpinner = document.getElementById('loginSpinner');
+
+            if (!email || !password) {
+                showAlert('loginError', 'error', 'Email and password required');
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtnText.textContent = 'Logging in...';
+            loginSpinner.classList.remove('hidden');
+            hideAlert('loginError');
+
+            auth.signInWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    currentUser = userCredential.user;
+                    currentRole = 'admin';
+
+                    const userAvatar = document.getElementById('userAvatar');
+                    const userEmail = document.getElementById('userEmail');
+
+                    if (userAvatar) userAvatar.textContent = currentUser.email.charAt(0).toUpperCase();
+                    if (userEmail) userEmail.textContent = currentUser.email;
+
+                    showAdmin();
+                    showAlert('successAlert', 'success', 'Welcome Admin!');
+
+                    // Update connection dengan role admin
+                    updateConnection();
+
+                    // Setup admin realtime listener
+                    kandidatRef.on("value", (snapshot) => {
+                        renderKandidat(snapshot, true);
+                    });
+                })
+                .catch((error) => {
+                    let errorMessage = 'Login failed';
+                    switch (error.code) {
+                        case 'auth/user-not-found':
+                            errorMessage = 'Admin account not found';
+                            break;
+                        case 'auth/wrong-password':
+                            errorMessage = 'Invalid password';
+                            break;
+                        default:
+                            errorMessage = error.message;
+                    }
+                    showAlert('loginError', 'error', errorMessage);
+                })
+                .finally(() => {
+                    loginBtn.disabled = false;
+                    loginBtnText.textContent = 'Login sebagai Admin';
+                    loginSpinner.classList.add('hidden');
+                });
+        }
+
+        function logout() {
+            auth.signOut()
+                .then(() => {
+                    currentUser = null;
+                    currentRole = 'guest';
+                    showDashboard();
+                    showAlert('statusAlert', 'info', 'Logged out successfully');
+                    // Update connection dengan role guest
+                    updateConnection();
+                })
+                .catch((error) => {
+                    showAlert('errorAlert', 'error', 'Logout failed: ' + error.message);
+                });
+        }
+
+        // === Candidate Management ===
+        function renderKandidat(snapshot, isAdminView = false) {
+            const tbodyId = isAdminView ? 'adminKandidatBody' : 'guestKandidatBody';
+            const tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
+
+            tbody.innerHTML = "";
+            const data = snapshot.val() || {};
+            const labels = [];
+            const values = [];
+            const colors = ['#4299e1', '#48bb78', '#ed8936', '#f56565', '#9f7aea'];
+
+            const entries = Object.entries(data);
+
+            if (entries.length === 0) {
+                tbody.innerHTML = `
+                    <tr class="table-row">
+                        <td colspan="${isAdminView ? 5 : 4}" class="p-8 text-center text-gray-500">
+                            No candidates available
+                        </td>
+                    </tr>`;
+            } else {
+                entries.forEach(([id, kandidat], index) => {
+                    if (!kandidat || !kandidat.nama) return;
+
+                    const suara = kandidat.suara || 0;
+                    const row = document.createElement("tr");
+                    row.className = "table-row";
+
+                    row.innerHTML = `
+                        <td class="p-4 text-center font-bold">${index + 1}</td>
+                        <td class="p-4 font-semibold">
+                            <span class="inline-block w-3 h-3 rounded-full mr-2" 
+                                style="background: ${colors[index % colors.length]}"></span>
+                            ${kandidat.nama}
+                        </td>
+                        <td class="p-4 text-2xl font-bold text-center">${suara}</td>
+                        <td class="p-4 text-center hidden lg:table-cell">
+                            <span class="tally">${buatTally(suara)}</span>
+                        </td>
+                        ${isAdminView ? `
+                        <td class="p-4">
+                            <div class="flex gap-2 justify-center">
+                                <button onclick="ubahSuara('${id}', 1)" class="btn btn-primary px-3 py-2">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                <button onclick="ubahSuara('${id}', -1)" class="btn btn-warning px-3 py-2">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <button onclick="hapusKandidat('${id}')" class="btn btn-danger px-3 py-2">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>` : ''}
+                    `;
+
+                    tbody.appendChild(row);
+                    labels.push(kandidat.nama);
+                    values.push(suara);
+                });
+            }
+
+            updateChart(labels, values, isAdminView);
+        }
+
+        function buatTally(jumlah) {
+            if (!jumlah) return "-";
+            let tally = "";
+            const fullGroups = Math.floor(jumlah / 5);
+            const remainder = jumlah % 5;
+
+            for (let i = 0; i < fullGroups; i++) {
+                tally += "<span class='five'>||||</span> ";
+            }
+            for (let i = 0; i < remainder; i++) {
+                tally += "|";
+            }
+            return tally || "-";
+        }
+
+        function tambahKandidat() {
+            const nama = document.getElementById("newKandidat").value.trim();
+            if (!nama) {
+                showAlert('errorAlert', 'error', 'Candidate name required');
+                return;
+            }
+
+            kandidatRef.once("value").then(snapshot => {
+                const data = snapshot.val() || {};
+                const existingNames = Object.values(data).map(k => k.nama?.toLowerCase());
+
+                if (existingNames.includes(nama.toLowerCase())) {
+                    showAlert('errorAlert', 'error', 'Candidate already exists');
+                    return;
+                }
+
+                kandidatRef.push({
+                    nama: nama,
+                    suara: 0,
+                    createdAt: firebase.database.ServerValue.TIMESTAMP
+                }).then(() => {
+                    document.getElementById("newKandidat").value = "";
+                    showAlert('successAlert', 'success', `Candidate "${nama}" added`);
+                });
+            }).catch(error => {
+                showAlert('errorAlert', 'error', 'Failed to add candidate: ' + error.message);
+            });
+        }
+
+        function ubahSuara(id, delta) {
+            const ref = kandidatRef.child(id).child("suara");
+            ref.transaction(currentValue => {
+                return Math.max(0, (currentValue || 0) + delta);
+            }).catch(error => {
+                showAlert('errorAlert', 'error', 'Failed to update votes: ' + error.message);
+            });
+        }
+
+        function hapusKandidat(id) {
+            if (confirm('Delete this candidate?')) {
+                kandidatRef.child(id).remove()
+                    .then(() => {
+                        showAlert('successAlert', 'success', 'Candidate deleted');
+                    })
+                    .catch(error => {
+                        showAlert('errorAlert', 'error', 'Failed to delete: ' + error.message);
+                    });
+            }
+        }
+
+        function resetSemua() {
+            if (confirm("Reset all votes to 0?")) {
+                kandidatRef.once("value")
+                    .then(snapshot => {
+                        const updates = {};
+                        snapshot.forEach(child => {
+                            updates[`${child.key}/suara`] = 0;
+                        });
+                        return kandidatRef.update(updates);
+                    })
+                    .then(() => {
+                        showAlert('successAlert', 'success', 'All votes reset');
+                    })
+                    .catch(error => {
+                        showAlert('errorAlert', 'error', 'Failed to reset: ' + error.message);
+                    });
+            }
+        }
+
+        // === Chart System ===
+        function updateChart(labels, values, isAdminView = false) {
+            const canvasId = isAdminView ? 'adminChartSuara' : 'guestChartSuara';
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            const currentChart = isAdminView ? adminChart : guestChart;
+            const colors = ['#4299e1', '#48bb78', '#ed8936', '#f56565', '#9f7aea'];
+
+            if (!currentChart) {
+                const ctx = canvas.getContext('2d');
+                const newChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Votes',
+                            data: values,
+                            backgroundColor: colors,
+                            borderColor: colors.map(color => color),
+                            borderWidth: 2,
+                            borderRadius: 6,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            }
+                        }
+                    }
+                });
+
+                if (isAdminView) {
+                    adminChart = newChart;
+                } else {
+                    guestChart = newChart;
+                }
+            } else {
+                currentChart.data.labels = labels;
+                currentChart.data.datasets[0].data = values;
+                currentChart.update();
+            }
+        }
+
+        // === Dark Mode ===
+        function toggleDarkMode() {
+            const isDark = document.body.classList.contains('dark-mode');
+            applyTheme(!isDark);
+        }
+
+        function applyTheme(isDark) {
+            if (isDark) {
+                document.body.classList.add('dark-mode');
+                localStorage.setItem('theme', 'dark');
+                document.getElementById('themeIcon').className = "fas fa-sun";
+            } else {
+                document.body.classList.remove('dark-mode');
+                localStorage.setItem('theme', 'light');
+                document.getElementById('themeIcon').className = "fas fa-moon";
+            }
+        }
+
+        // === Initialize App ===
+        function initializeApp() {
+            debugLog('Initializing application');
+
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            applyTheme(savedTheme === 'dark');
+
+            initializeSystem();
+            checkSystemStatus();
+            setupConnectionTracking();
+
+            // Check auth state first - ini yang utama!
+            checkAuthState();
+
+            // Setup guest listener setelah check auth
             setTimeout(() => {
-              guestAlert.style.display = 'none';
-            }, 5000);
-          }, 1000);
+                setupGuestListener();
+            }, 1000);
+
+            debugLog('Application initialized successfully');
         }
 
-        console.log('App initialized successfully');
-      } catch (error) {
-        console.error('App initialization error:', error);
-        showAlert('error', 'Gagal memuat aplikasi. Silakan refresh halaman.');
-      }
-    }
-
-    // Initialize when DOM is ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initializeApp);
-    } else {
-      initializeApp();
-    }
-
-    // === 15. Dark Mode Functions ===
-    function applyTheme(isDark) {
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-        document.body.classList.add('dark-mode');
-        localStorage.setItem('theme', 'dark');
-        document.getElementById('themeIcon').className = "fas fa-sun";
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.body.classList.remove('dark-mode');
-        localStorage.setItem('theme', 'light');
-        document.getElementById('themeIcon').className = "fas fa-moon";
-      }
-    }
-
-    function toggleDarkMode() {
-      const isDark = document.body.classList.contains('dark-mode');
-      applyTheme(!isDark);
-    }
-
-    // Initialize theme on page load - Default to light mode
-    document.addEventListener('DOMContentLoaded', () => {
-      const savedTheme = localStorage.getItem('theme') || 'light';
-      applyTheme(savedTheme === 'dark');
-    });
-  </script>
+        // Start the app
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
+    </script>
 </body>
 
 </html>
